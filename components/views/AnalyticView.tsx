@@ -1,16 +1,19 @@
+"use client";
+
 import React, { useState, useMemo } from "react";
 import ReactECharts from "echarts-for-react";
-import { Trade, DailySummary } from "../../types.ts";
-import { formatCurrency } from "../../utils.ts";
-import Calendar from "../Calendar.tsx";
+import { Trade, DailySummary } from "../../types";
+import Calendar from "../Calendar";
+import { useDayDetails } from "@/app/(protected)/DayDetailsContext";
 
 interface AnalyticViewProps {
   trades: Trade[];
-  onDayClick: (date: string) => void;
+  onDayClick?: (date: string) => void;
 }
 
 const AnalyticView: React.FC<AnalyticViewProps> = ({ trades, onDayClick }) => {
   const [calDate, setCalDate] = useState({ year: 2024, month: 5 }); // June 2024
+  const { openDayDetails } = useDayDetails();
 
   const totalPnL = trades.reduce((acc, t) => acc + t.pnl, 0);
   const winnersCount = trades.filter((t) => t.pnl > 0).length;
@@ -166,28 +169,28 @@ const AnalyticView: React.FC<AnalyticViewProps> = ({ trades, onDayClick }) => {
           label="Account Balance"
           value="$213,798.59"
           subValue="113.8%"
-          iconBg="bg-[#8b4513]"
+          iconBg="bg-primary"
           icon="🏦"
         />
         <AnalyticCard
           label="Net P&L"
           value={`$${totalPnL.toLocaleString()}`}
           subValue="113.8%"
-          iconBg="bg-[#ff4d00]"
+          iconBg="bg-primary"
           icon="📈"
         />
         <AnalyticCard
           label="Win Rate"
           value={`${winRate.toFixed(2)}%`}
           subValue={`${winnersCount}W/${losersCount}L`}
-          iconBg="bg-[#ff4d00]"
+          iconBg="bg-primary"
           icon="%"
         />
         <AnalyticCard
           label="Profit Factor"
           value="2.74"
           subValue="$432.69 Avg. P/L"
-          iconBg="bg-[#ff4d00]"
+          iconBg="bg-primary"
           icon="$"
         />
       </div>
@@ -301,7 +304,7 @@ const AnalyticView: React.FC<AnalyticViewProps> = ({ trades, onDayClick }) => {
             month={calDate.month}
             onMonthChange={(y, m) => setCalDate({ year: y, month: m })}
             dailySummaries={dailySummaries}
-            onDayClick={onDayClick}
+            onDayClick={openDayDetails}
             selectedDate={null}
           />
         </div>
@@ -374,7 +377,7 @@ const AnalyticCard = ({ label, value, subValue, iconBg, icon }: any) => (
       </div>
     </div>
     <div
-      className={`w-12 h-12 ${iconBg} rounded-2xl flex items-center justify-center text-xl shadow-lg shadow-orange-500/10 shrink-0 ml-4 transform group-hover:scale-110 transition-transform duration-300`}
+      className={`w-12 h-12 ${iconBg} text-white rounded-2xl flex items-center justify-center text-xl shadow-lg shadow-orange-500/10 shrink-0 ml-4 transform group-hover:scale-110 transition-transform duration-300`}
     >
       {icon}
     </div>

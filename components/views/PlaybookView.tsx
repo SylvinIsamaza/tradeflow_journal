@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from "react";
 import ReactECharts from "echarts-for-react";
-import { Strategy, Trade } from "../../types.ts";
-import { formatCurrency } from "../../utils.ts";
-import Modal from "../Modal.tsx";
+import { Strategy, Trade } from "../../types";
+import { formatCurrency } from "../../utils";
+import Modal from "../Modal";
 
 interface PlaybookViewProps {
   strategies: Strategy[];
@@ -191,29 +191,86 @@ const PlaybookView: React.FC<PlaybookViewProps> = ({
         </div>
         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-2">
           {strategies.map((strat) => (
-            <button
+            <div
               key={strat.id}
-              onClick={() => setSelectedStrategyId(strat.id)}
-              className={`w-full text-left p-4 rounded-2xl border transition-all flex flex-col gap-1 ${
+              className={`w-full p-3 rounded-2xl border transition-all flex items-center justify-between group ${
                 selectedStrategyId === strat.id
                   ? "bg-white border-indigo-200 shadow-xl shadow-indigo-100/50 ring-1 ring-indigo-50"
-                  : "bg-slate-50 border-transparent hover:bg-slate-100 text-slate-500"
+                  : "bg-slate-50 border-transparent hover:bg-slate-100"
               }`}
             >
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: strat.color }}
-                ></div>
-                <span className="text-sm font-black text-slate-800">
-                  {strat.name}
-                </span>
+              <button
+                onClick={() => setSelectedStrategyId(strat.id)}
+                className="flex-1 text-left flex flex-col gap-1"
+              >
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: strat.color }}
+                  ></div>
+                  <span
+                    className={`text-sm font-black ${selectedStrategyId === strat.id ? "text-slate-800" : "text-slate-500"}`}
+                  >
+                    {strat.name}
+                  </span>
+                </div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  {trades.filter((t) => t.setups.includes(strat.name)).length}{" "}
+                  Trades logged
+                </p>
+              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingStrategy(strat);
+                    setEditorStep("GENERAL");
+                    setIsEditorOpen(true);
+                  }}
+                  className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                  title="Edit strategy"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    />
+                  </svg>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteStrategy(strat.id);
+                    if (selectedStrategyId === strat.id) {
+                      setSelectedStrategyId(strategies[0]?.id || null);
+                    }
+                  }}
+                  className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                  title="Delete strategy"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                </button>
               </div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                {trades.filter((t) => t.setups.includes(strat.name)).length}{" "}
-                Trades logged
-              </p>
-            </button>
+            </div>
           ))}
           {strategies.length === 0 && (
             <div className="text-center py-12 opacity-40">
@@ -496,12 +553,12 @@ const PlaybookView: React.FC<PlaybookViewProps> = ({
           </div>
 
           {/* Footer Navigation */}
-          <div className="px-8 py-6 border-t border-slate-100 flex items-center justify-between bg-slate-50/20 shrink-0">
-            <div className="flex gap-3">
+          <div className="px-8 py-6 gap-3 flex-1 w-full border-t border-slate-100 flex items-center justify-between bg-slate-50/20 shrink-0">
+            <div className="flex flex-1 gap-3">
               {editorStep !== "GENERAL" && (
                 <button
                   onClick={prevStep}
-                  className="px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 hover:bg-slate-200 transition-all"
+                  className="px-6 py-3 flex-1 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 hover:bg-slate-200 transition-all"
                 >
                   Back
                 </button>
@@ -509,31 +566,30 @@ const PlaybookView: React.FC<PlaybookViewProps> = ({
               {editingStrategy?.id && (
                 <button
                   onClick={() => {
-                    if (confirm("Delete this playbook?")) {
-                      onDeleteStrategy(editingStrategy.id!);
+                    
                       setIsEditorOpen(false);
-                    }
+                  
                   }}
-                  className="px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-rose-500 bg-rose-50 hover:bg-rose-100 transition-all"
+                  className="px-6 flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-rose-500 bg-rose-50 hover:bg-rose-100 transition-all"
                 >
-                  Delete
+                  Cancel
                 </button>
               )}
             </div>
 
-            <div className="flex gap-3">
+            <div className={`flex ${(editorStep=="RISK")?"flex-[0.5]":editorStep!="GENERAL"?"flex-[0.5]":"flex-1"}  gap-3`}>
               {editorStep !== "RISK" ? (
                 <button
                   disabled={!editingStrategy?.name}
                   onClick={nextStep}
-                  className="px-10 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-white bg-indigo-600 shadow-xl shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 disabled:shadow-none transition-all active:scale-95"
+                  className="px-10 py-3 flex-1 rounded-xl text-[10px] font-black uppercase tracking-widest text-white bg-indigo-600 shadow-xl shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 disabled:shadow-none transition-all active:scale-95"
                 >
                   Next
                 </button>
               ) : (
                 <button
                   onClick={handleSave}
-                  className="px-10 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-white bg-emerald-600 shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95"
+                  className="px-10 py-3 flex-1  rounded-xl text-[10px] font-black uppercase tracking-widest text-white bg-emerald-600 shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95"
                 >
                   Save & Finish
                 </button>

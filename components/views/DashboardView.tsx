@@ -1,12 +1,15 @@
+"use client";
+
 import React, { useState } from "react";
 import ReactECharts from "echarts-for-react";
-import { Trade, DailySummary } from "../../types.ts";
-import { formatCurrency } from "../../utils.ts";
-import Calendar from "../Calendar.tsx";
+import { Trade, DailySummary } from "../../types";
+import { formatCurrency } from "../../utils";
+import Calendar from "../Calendar";
+import { useDayDetails } from "@/app/(protected)/DayDetailsContext";
 
 interface DashboardViewProps {
   trades: Trade[];
-  onDayClick: (date: string) => void;
+  onDayClick?: (date: string) => void;
 }
 
 const DashboardView: React.FC<DashboardViewProps> = ({
@@ -14,15 +17,59 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   onDayClick,
 }) => {
   const [calDate, setCalDate] = useState({ year: 2024, month: 5 }); // June 2024
+  const { openDayDetails } = useDayDetails();
   const totalPnL = trades.reduce((acc, t) => acc + t.pnl, 0);
+
+  // Helper to create a complete DailySummary object
+  const createEmptySummary = (date: string, accountId: string): DailySummary => ({
+    accountId,
+    date,
+    totalPnL: 0,
+    totalTrades: 0,
+    missedTrades: 0,
+    wins: 0,
+    losses: 0,
+    winRate: 0,
+    profitFactor: 0,
+    averageWin: 0,
+    averageLoss: 0,
+    averageRR: 0,
+    bestWin: 0,
+    worstLoss: 0,
+    averageTradeDuration: '0',
+    avgWinStreak: 0,
+    maxWinStreak: 0,
+    avgLossStreak: 0,
+    maxLossStreak: 0,
+    recoveryFactor: 0,
+    maxDrawdown: 0,
+    totalVolume: 0,
+    totalCommission: 0,
+    zellaScore: 0,
+    winRateScore: 0,
+    profitFactorScore: 0,
+    avgWinLossScore: 0,
+    recoveryFactorScore: 0,
+    maxDrawdownScore: 0,
+    tradeIds: [],
+    totalComments: 0,
+  });
 
   const dailySummaries = trades.reduce(
     (acc, trade) => {
       if (!acc[trade.date]) {
-        acc[trade.date] = { date: trade.date, totalPnL: 0, tradeCount: 0 };
+        acc[trade.date] = createEmptySummary(trade.date, trade.accountId);
       }
       acc[trade.date].totalPnL += trade.pnl;
-      acc[trade.date].tradeCount += 1;
+      acc[trade.date].totalTrades += 1;
+      acc[trade.date].tradeIds.push(trade.id);
+      
+      if (trade.pnl > 0) {
+        acc[trade.date].wins += 1;
+      } else if (trade.pnl < 0) {
+        acc[trade.date].losses += 1;
+      }
+      
       return acc;
     },
     {} as Record<string, DailySummary>,
@@ -94,7 +141,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             month={calDate.month}
             onMonthChange={(y, m) => setCalDate({ year: y, month: m })}
             dailySummaries={dailySummaries}
-            onDayClick={onDayClick}
+            onDayClick={openDayDetails}
             selectedDate={null}
           />
         </div>

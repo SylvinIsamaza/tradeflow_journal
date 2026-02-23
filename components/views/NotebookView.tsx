@@ -1,19 +1,30 @@
+"use client"
 import React, { useState, useMemo } from "react";
-import ReactQuill from "react-quill";
-import "react-quill/dist/quill.snow.css";
-import { Folder, Note } from "../../types.ts";
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
+import { Folder, Note } from "../../types";
+import { useNotes, useFolders, useCreateNote, useUpdateNote, useDeleteNote, useCreateFolder, useDeleteFolder } from "@/lib/hooks";
+import { useApp } from "@/app/AppContext";
 
 const NotebookView: React.FC = () => {
-  const [folders, setFolders] = useState<Folder[]>([
-    { id: "f-1", name: "Trade Notes" },
-    { id: "f-2", name: "Daily Journal" },
-    { id: "f-3", name: "Sessions Recap" },
-  ]);
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [selectedFolderId, setSelectedFolderId] = useState<string>("f-1");
+  const { selectedAccount } = useApp();
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [isAddingFolder, setIsAddingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
+  const [editedTitle, setEditedTitle] = useState("");
+  const [editedContent, setEditedContent] = useState("");
+  
+  const { data: folders = [], isLoading: foldersLoading } = useFolders(selectedAccount?.id);
+  const { data: notes = [], isLoading: notesLoading } = useNotes({ 
+    account_id: selectedAccount?.id,
+    folder_id: selectedFolderId || undefined 
+  });
+  const createNoteMutation = useCreateNote();
+  const updateNoteMutation = useUpdateNote();
+  const deleteNoteMutation = useDeleteNote();
+  const createFolderMutation = useCreateFolder();
+  const deleteFolderMutation = useDeleteFolder();
 
   // Mobile view state: 'folders', 'notes', 'editor'
   const [mobilePane, setMobilePane] = useState<"folders" | "notes" | "editor">(
@@ -61,55 +72,83 @@ const NotebookView: React.FC = () => {
     "video",
   ];
 
-  const currentFolderNotes = useMemo(
-    () => notes.filter((n) => n.folderId === selectedFolderId),
-    [notes, selectedFolderId],
-  );
+  const currentFolderNotes = notes;
 
   const selectedNote = useMemo(
     () => notes.find((n) => n.id === selectedNoteId),
     [notes, selectedNoteId],
   );
 
+  React.useEffect(() => {
+    if (folders.length > 0 && !selectedFolderId) {
+      setSelectedFolderId(folders[0].id);
+    }
+  }, [folders, selectedFolderId]);
+
+  React.useEffect(() => {
+    if (selectedNote) {
+      setEditedTitle(selectedNote.title);
+      setEditedContent(selectedNote.content);
+    }
+  }, [selectedNote]);
+
   const handleAddFolder = () => {
-    if (newFolderName.trim()) {
-      setFolders([
-        ...folders,
-        { id: `f-${Date.now()}`, name: newFolderName.trim() },
-      ]);
+    if (newFolderName.trim() && selectedAccount) {
+      createFolderMutation.mutate({
+        account_id: selectedAccount.id,
+        name: newFolderName.trim(),
+      });
       setNewFolderName("");
       setIsAddingFolder(false);
     }
   };
 
   const handleAddNote = () => {
-    const newNote: Note = {
-      id: `n-${Date.now()}`,
-      folderId: selectedFolderId,
-      title: "Untilted Note",
+    if (!selectedFolderId || !selectedAccount) return;
+    createNoteMutation.mutate({
+      account_id: selectedAccount.id,
+      folder_id: selectedFolderId,
+      title: "Untitled Note",
       content: "",
       tags: [],
       date: new Date().toISOString().split("T")[0],
-    };
-    setNotes([newNote, ...notes]);
-    setSelectedNoteId(newNote.id);
-    setMobilePane("editor");
+    }, {
+      onSuccess: (newNote) => {
+        setSelectedNoteId(newNote.id);
+        setMobilePane("editor");
+      }
+    });
   };
 
   const handleUpdateNote = (updates: Partial<Note>) => {
     if (!selectedNoteId) return;
-    setNotes(
-      notes.map((n) => (n.id === selectedNoteId ? { ...n, ...updates } : n)),
-    );
+    updateNoteMutation.mutate({ id: selectedNoteId, data: updates });
   };
 
-  const handleAddTag = () => {
-    const tag = prompt("Enter tag name:");
-    if (tag && selectedNote) {
-      const updatedTags = [...(selectedNote.tags || []), tag.toUpperCase()];
-      handleUpdateNote({ tags: updatedTags });
+  const handleSaveNote = () => {
+    if (!selectedNoteId) return;
+    updateNoteMutation.mutate({ 
+      id: selectedNoteId, 
+      data: { title: editedTitle, content: editedContent } 
+    });
+  };
+
+  const handleDeleteNote = () => {
+    if (!selectedNoteId) return;
+    if (confirm("Delete note?")) {
+      deleteNoteMutation.mutate(selectedNoteId);
+      setSelectedNoteId(null);
+      setMobilePane("notes");
     }
   };
+
+  if (foldersLoading || notesLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
 
   const selectFolder = (id: string) => {
     setSelectedFolderId(id);
@@ -296,26 +335,20 @@ const NotebookView: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
               <input
                 type="text"
-                value={selectedNote.title}
-                onChange={(e) => handleUpdateNote({ title: e.target.value })}
+                value={editedTitle}
+                onChange={(e) => setEditedTitle(e.target.value)}
                 className="bg-transparent text-xl sm:text-2xl font-black text-slate-800 tracking-tight outline-none w-full"
                 placeholder="Title of your note..."
               />
               <div className="flex gap-2 shrink-0">
                 <button
-                  onClick={handleAddTag}
-                  className="bg-white border border-slate-200 text-[10px] font-black uppercase tracking-widest text-[#5e5ce6] px-4 py-2 rounded-xl shadow-sm"
+                  onClick={handleSaveNote}
+                  className="bg-emerald-50 border border-emerald-100 text-[10px] font-black uppercase tracking-widest text-emerald-600 px-4 py-2 rounded-xl shadow-sm hover:bg-emerald-100"
                 >
-                  Tag
+                  Save
                 </button>
                 <button
-                  onClick={() => {
-                    if (confirm("Delete note?")) {
-                      setNotes(notes.filter((n) => n.id !== selectedNoteId));
-                      setSelectedNoteId(null);
-                      setMobilePane("notes");
-                    }
-                  }}
+                  onClick={handleDeleteNote}
                   className="bg-rose-50 border border-rose-100 text-[10px] font-black uppercase tracking-widest text-rose-500 px-4 py-2 rounded-xl shadow-sm"
                 >
                   Delete
@@ -332,8 +365,8 @@ const NotebookView: React.FC = () => {
                 }}
               >
                 <ReactQuill
-                  value={selectedNote.content}
-                  onChange={(content) => handleUpdateNote({ content })}
+                  value={editedContent}
+                  onChange={setEditedContent}
                   modules={modules}
                   formats={formats}
                   placeholder="Start typing your analysis..."

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Account, DateRange, Filters, TradeSide } from '../types.ts';
+import { Account, DateRange, Filters, TradeSide } from '../types';
 
 interface TopBarProps {
   onAddTrade: () => void;

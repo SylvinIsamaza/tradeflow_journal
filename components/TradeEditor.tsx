@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Trade, TradeSide, Strategy } from '../types.ts';
+import { Trade, TradeSide, TradeStatus, Strategy } from '../types';
 
 interface TradeEditorProps {
   date: string;
@@ -23,10 +23,29 @@ const TradeEditor: React.FC<TradeEditorProps> = ({ date, onSave, onClose, initia
   const [swap, setSwap] = useState(initialTrade?.swap || 0);
   const [notes, setNotes] = useState(initialTrade?.notes || '');
   const [selectedSetups, setSelectedSetups] = useState<string[]>(initialTrade?.setups || []);
+  // Time fields
+  const [entryTime, setEntryTime] = useState(initialTrade?.time || '09:00');
+  const [exitTime, setExitTime] = useState(initialTrade?.closeTime || '17:00');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const pnl = (exitPrice - entryPrice) * quantity * (side === TradeSide.LONG ? 1 : -1) - commission + swap;
+    
+    const entryDateTime = new Date(`${date}T${entryTime}:00`);
+    const exitDateTime = new Date(`${date}T${exitTime}:00`);
+    
+    // Calculate duration
+    let duration = '0m';
+    if (exitDateTime > entryDateTime) {
+      const diffMs = exitDateTime.getTime() - entryDateTime.getTime();
+      const hours = Math.floor(diffMs / (1000 * 60 * 60));
+      const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      if (hours > 0) {
+        duration = `${hours}h ${minutes}m`;
+      } else {
+        duration = `${minutes}m`;
+      }
+    }
     
     onSave({
       id: initialTrade?.id || Math.random().toString(36).substr(2, 9),
@@ -38,10 +57,10 @@ const TradeEditor: React.FC<TradeEditorProps> = ({ date, onSave, onClose, initia
       closePrice: exitPrice,
       quantity,
       pnl,
-      duration: '1h 30m',
+      duration,
       tradeType: 'Day Trade',
       executionType: 'Market',
-      status: pnl > 0 ? 'WIN' : pnl === 0 ? 'BE' : 'LOSS',
+      status: pnl > 0 ? TradeStatus.WIN : pnl === 0 ? TradeStatus.BE : TradeStatus.LOSS,
       stopLoss,
       takeProfit,
       commission,
@@ -50,7 +69,11 @@ const TradeEditor: React.FC<TradeEditorProps> = ({ date, onSave, onClose, initia
       generalTags: ['Trend'],
       exitTags: ['Target Hit'],
       processTags: ['Followed Plan'],
-      notes
+      notes,
+      executedAt: entryDateTime.toISOString(),
+      closedAt: exitDateTime.toISOString(),
+      time: entryTime,
+      closeTime: exitTime,
     });
   };
 
@@ -95,6 +118,11 @@ const TradeEditor: React.FC<TradeEditorProps> = ({ date, onSave, onClose, initia
           <div className="grid grid-cols-2 gap-6">
             <Field label="Quantity / Lot" type="number" step="any" value={quantity} onChange={(e: any) => setQuantity(Number(e.target.value))} />
             <Field label="Trade Date" type="date" value={date} readOnly />
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <Field label="Entry Time" type="time" value={entryTime} onChange={(e: any) => setEntryTime(e.target.value)} />
+            <Field label="Exit Time" type="time" value={exitTime} onChange={(e: any) => setExitTime(e.target.value)} />
           </div>
 
           <div className="grid grid-cols-2 gap-6">

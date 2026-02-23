@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from "react";
 import ReactECharts from "echarts-for-react";
-import { Trade, ReportTab } from "../../types.ts";
-import { formatCurrency } from "../../utils.ts";
-import Table, { Column } from "../Table.tsx";
+import { Trade, ReportTab } from "../../types";
+import { formatCurrency } from "../../utils";
+import Table, { Column } from "../Table";
 
 interface ReportsViewProps {
   trades: Trade[];

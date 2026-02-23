@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import Modal from '../Modal.tsx';
+import Modal from '../Modal';
 
 const SettingsView: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState('general');

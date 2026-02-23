@@ -24,13 +24,7 @@ const AICompanion: React.FC<AICompanionProps> = ({ isOpen, onClose, trades }) =>
     }
   }, [messages, isTyping]);
 
-  const handleOpenSelectKey = async () => {
-    if (window.aistudio?.openSelectKey) {
-      await window.aistudio.openSelectKey();
-      setErrorState(null);
-      setMessages(prev => [...prev, { role: 'model', text: "API key updated! I'm ready to help again. What were we discussing?" }]);
-    }
-  };
+
 
   const handleSend = async (text: string = input) => {
     if (!text.trim() || isTyping) return;
@@ -94,14 +88,7 @@ const AICompanion: React.FC<AICompanionProps> = ({ isOpen, onClose, trades }) =>
             }`}>
               {m.text}
               
-              {m.role === 'model' && i === messages.length - 1 && errorState === 'QUOTA_EXCEEDED' && (
-                <button 
-                  onClick={handleOpenSelectKey}
-                  className="mt-3 w-full bg-indigo-600 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95"
-                >
-                  Select Personal API Key
-                </button>
-              )}
+            
             </div>
           </div>
         ))}

@@ -46,16 +46,10 @@ const DayDetailsModal: React.FC<DayDetailsModalProps> = ({
               {formatCurrency(totalPnL)}
             </span>
           </div>
-          <button 
-            onClick={onAddTrade}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 font-bold text-sm active:scale-95"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
-            Add Trade
-          </button>
+        
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8">
+        <div className="flex flex-col  gap-8">
           {/* Left Column: Trades */}
           <div className="space-y-4">
             <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Trades ({trades.length})</h4>
@@ -64,9 +58,9 @@ const DayDetailsModal: React.FC<DayDetailsModalProps> = ({
                 No trades recorded for this day.
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className=" grid md:grid-cols-2 grid-cols-1 w-full items-center justify-center gap-3">
                 {trades.map(trade => (
-                  <div key={trade.id} className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm hover:border-indigo-100 transition-all">
+                  <div key={trade.id} className="p-4 w-full flex-1 rounded-xl border border-slate-100 bg-white shadow-sm hover:border-indigo-100 transition-all">
                     <div className="flex justify-between items-start mb-2">
                       <span className="font-black text-slate-800">{trade.symbol}</span>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${trade.side === TradeSide.LONG ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>

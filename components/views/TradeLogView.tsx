@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect } from "react";
 import ReactECharts from "echarts-for-react";
-import { Trade, AIInsight } from "../../types.ts";
-import { formatCurrency } from "../../utils.ts";
-import Table, { Column } from "../Table.tsx";
-import Modal from "../Modal.tsx";
-import { getPerformanceInsights } from "../../services/geminiService.ts";
+import ExcelJS from "exceljs";
+import { Trade, AIInsight } from "../../types";
+import { formatCurrency } from "../../utils";
+import Table, { Column } from "../Table";
+import Modal from "../Modal";
+import { getPerformanceInsights } from "../../services/geminiService";
 
 interface TradeLogViewProps {
   trades: Trade[];
@@ -201,37 +202,94 @@ const TradeLogView: React.FC<TradeLogViewProps> = ({ trades }) => {
     setExportColumns((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const triggerDownload = () => {
+  const triggerDownload = async () => {
     const selectedKeys = ALL_COLUMN_KEYS.filter((k) => exportColumns[k]);
-    const headers = selectedKeys.join(",");
-    const rows = trades.map((t) => {
-      return selectedKeys
-        .map((k) => {
+    
+    if (exportFormat === "CSV") {
+      // Generate CSV
+      const headers = selectedKeys.join(",");
+      const rows = trades.map((t) => {
+        return selectedKeys
+          .map((k) => {
+            const accessor = masterColumns[k].accessor;
+            const val =
+              typeof accessor === "function"
+                ? accessor(t)
+                : t[accessor as keyof Trade];
+            return `"${String(val).replace(/"/g, '""')}"`;
+          })
+          .join(",");
+      });
+      const csvContent = [headers, ...rows].join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const fileName = `tradezella_export_${new Date().toISOString().split("T")[0]}.csv`;
+      link.setAttribute("href", url);
+      link.setAttribute("download", fileName);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      // Generate Excel with ExcelJS
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Trades");
+      
+      // Add headers with formatting
+      const headerRow = worksheet.addRow(selectedKeys);
+      headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      headerRow.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF5E5CE6" } // Indigo color
+      };
+      headerRow.alignment = { horizontal: "center", vertical: "middle" };
+      
+      // Add data rows
+      trades.forEach((trade) => {
+        const rowData = selectedKeys.map((k) => {
           const accessor = masterColumns[k].accessor;
           const val =
             typeof accessor === "function"
-              ? accessor(t)
-              : t[accessor as keyof Trade];
-          return `"${String(val).replace(/"/g, '""')}"`;
-        })
-        .join(",");
-    });
-    const csvContent = [headers, ...rows].join("\n");
-    const blob = new Blob([csvContent], {
-      type:
-        exportFormat === "CSV"
-          ? "text/csv;charset=utf-8;"
-          : "application/vnd.ms-excel;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    const fileName = `tradezilla_export_${new Date().toISOString().split("T")[0]}.${exportFormat === "CSV" ? "csv" : "xls"}`;
-    link.setAttribute("href", url);
-    link.setAttribute("download", fileName);
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+              ? accessor(trade)
+              : trade[accessor as keyof Trade];
+          return val;
+        });
+        const row = worksheet.addRow(rowData);
+        
+        // Style alternating rows
+        if (trades.indexOf(trade) % 2 === 0) {
+          row.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFF8FAFC" } // Light slate
+          };
+        }
+      });
+      
+      // Auto-fit columns
+      selectedKeys.forEach((_, idx) => {
+        const column = worksheet.getColumn(idx + 1);
+        column.width = 15;
+      });
+      
+      // Generate file
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const fileName = `tradezella_export_${new Date().toISOString().split("T")[0]}.xlsx`;
+      link.setAttribute("href", url);
+      link.setAttribute("download", fileName);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    
     setIsExportModalOpen(false);
   };
 
@@ -578,7 +636,7 @@ const TradeLogView: React.FC<TradeLogViewProps> = ({ trades }) => {
               Cancel
             </button>
             <button
-              onClick={triggerDownload}
+              onClick={() => triggerDownload()}
               className="flex-[2] py-4 rounded-2xl bg-indigo-600 text-white text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-100 active:scale-95 transition-all"
             >
               Download History
