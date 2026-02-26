@@ -6,8 +6,12 @@ import { useStrategies, useCreateStrategy, useUpdateStrategy, useDeleteStrategy,
 
 export default function PlaybooksPage() {
   const { selectedAccount } = useApp();
-  const { data: strategies = [], isLoading } = useStrategies(selectedAccount?.id);
-  const { data: trades = [] } = useTrades({ account_id: selectedAccount?.id });
+  const { data: strategiesResponse, isLoading } = useStrategies(selectedAccount?.id);
+  const { data: tradesResponse } = useTrades({ account_id: selectedAccount?.id, limit: 100 });
+  
+  const strategies = strategiesResponse?.strategies || [];
+  const trades = tradesResponse?.trades || [];
+  
   const createMutation = useCreateStrategy();
   const updateMutation = useUpdateStrategy();
   const deleteMutation = useDeleteStrategy();

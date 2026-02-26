@@ -203,11 +203,91 @@ const transformAllTimeStats = (data: AllTimeStatsResponse): AllTimeStats => ({
   updatedAt: data.updated_at,
 });
 
+export interface CompleteAnalyticsResponse {
+  account_id: string;
+  all_time: Record<string, any> | null;
+  daily: Record<string, any>[];
+  monthly: Record<string, any>[];
+  recent_trades: Record<string, any>[];
+  statistics: Record<string, any>;
+  charts: Record<string, any>;
+}
+
+export interface DashboardResponse {
+  account_id: string;
+  net_pnl: number;
+  total_trades: number;
+  win_rate: number;
+  profit_factor: number;
+  day_win_rate: number;
+  average_win_loss: number;
+  zella_score: number;
+  win_rate_score: number;
+  profit_factor_score: number;
+  avg_win_loss_score: number;
+  recovery_factor_score: number;
+  max_drawdown_score: number;
+  wins: number;
+  losses: number;
+  total_commission: number;
+  best_win: number;
+  worst_loss: number;
+  average_trade_duration: string;
+  avg_win_streak: number;
+  max_win_streak: number;
+  avg_loss_streak: number;
+  max_loss_streak: number;
+  daily_summaries: Record<string, any>[];
+  recent_trades: Record<string, any>[];
+  charts: Record<string, any>;
+  last_import: string | null;
+}
+
 // ============================================
 // Analytics API Service
 // ============================================
 
 export const analyticsApi = {
+  // Get dashboard data with filtering support
+  async getDashboard(
+    accountId: string,
+    startDate?: string,
+    endDate?: string,
+    limit: number = 100
+  ): Promise<DashboardResponse | null> {
+    try {
+      let url = `/analytics/dashboard/${accountId}?limit=${limit}`;
+      if (startDate && endDate) {
+        url = `/analytics/dashboard/${accountId}?start_date=${startDate}&end_date=${endDate}&limit=${limit}`;
+      }
+      const response = await privateClient.get<DashboardResponse>(url);
+      return response.data;
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error);
+      return null;
+    }
+  },
+
+  // Get complete analytics in a single call
+  async getCompleteAnalytics(
+    accountId: string,
+    days: number = 30,
+    startDate?: string,
+    endDate?: string
+  ): Promise<CompleteAnalyticsResponse | null> {
+    try {
+      let url = `/analytics/complete/${accountId}?days=${days}`;
+      if (startDate && endDate) {
+        url = `/analytics/complete/${accountId}?start_date=${startDate}&end_date=${endDate}`;
+      }
+      const response = await privateClient.get<CompleteAnalyticsResponse>(url);
+      return response.data;
+    } catch (error) {
+      console.error("Failed to fetch complete analytics:", error);
+      return null;
+    }
+  },
+
   // Get daily summary for a specific date
   async getDailySummary(accountId: string, date: string): Promise<DailySummary | null> {
     try {

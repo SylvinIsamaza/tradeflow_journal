@@ -1,48 +1,123 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import ReactECharts from "echarts-for-react";
-import { Trade, DailySummary } from "../../types";
+import { DailySummary, CommentType } from "../../types";
 import Calendar from "../Calendar";
-import { useDayDetails } from "@/app/(protected)/DayDetailsContext";
+import DayDetailsModal from "../DayDetailsModal";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import dynamic from "next/dynamic";
+import { CompleteAnalyticsResponse } from "../../lib/api/analytics";
+
+const CommentEditor = dynamic(() => import("../CommentEditor"), {
+  ssr: false,
+});
 
 interface AnalyticViewProps {
-  trades: Trade[];
+  analyticsData?: CompleteAnalyticsResponse | null;
   onDayClick?: (date: string) => void;
 }
 
-const AnalyticView: React.FC<AnalyticViewProps> = ({ trades, onDayClick }) => {
-  const [calDate, setCalDate] = useState({ year: 2024, month: 5 }); // June 2024
-  const { openDayDetails } = useDayDetails();
+const AnalyticView: React.FC<AnalyticViewProps> = ({ analyticsData, onDayClick }) => {
+  // Use current date for calendar
+  const now = new Date();
+  const [calDate, setCalDate] = useState({ year: now.getFullYear(), month: now.getMonth() });
+  const [selectedDayDate, setSelectedDayDate] = useState<string | null>(null);
+  const [commentEditorState, setCommentEditorState] = useState<{ isOpen: boolean; type: CommentType } | null>(null);
 
-  const totalPnL = trades.reduce((acc, t) => acc + t.pnl, 0);
-  const winnersCount = trades.filter((t) => t.pnl > 0).length;
-  const losersCount = trades.filter((t) => t.pnl < 0).length;
-  const winRate = (winnersCount / (trades.length || 1)) * 100;
+  // Get data from API response (all calculated on backend)
+  const allTime = analyticsData?.all_time || {};
+  const daily = analyticsData?.daily || [];
+  const monthly = analyticsData?.monthly || [];
+  const charts = analyticsData?.charts || {};
+  
+  // Extract values for display (ensure they are numbers)
+  const totalTrades = Number(allTime?.total_trades) || 0;
+  const totalPnL = Number(allTime?.total_profit) || 0;
+  const winners = Number(allTime?.wins) || 0;
+  const losers = Number(allTime?.losses) || 0;
+  const winRate = Number(allTime?.win_rate) || 0;
+  const profitFactor = Number(allTime?.profit_factor) || 0;
+  const averageWin = Number(allTime?.average_win) || 0;
+  const averageLoss = Number(allTime?.average_loss) || 0;
+  const bestWin = Number(allTime?.best_win) || 0;
+  const worstLoss = Number(allTime?.worst_loss) || 0;
+  const averageRR = Number(allTime?.average_rr) || 0;
+  const totalCommission = Number(allTime?.total_commission) || 0;
+  
+  // Extract streak data from API (calculated on backend)
+  const avgWinStreak = Number(allTime?.avg_win_streak) || 0;
+  const maxWinStreak = Number(allTime?.max_win_streak) || 0;
+  const avgLossStreak = Number(allTime?.avg_loss_streak) || 0;
+  const maxLossStreak = Number(allTime?.max_loss_streak) || 0;
+  
+  // Average trade duration from backend
+  const avgTradeDuration = allTime?.average_trade_duration || '0m';
 
-  const dailySummaries = useMemo(() => {
-    return trades.reduce(
-      (acc, trade) => {
-        if (!acc[trade.date]) {
-          acc[trade.date] = { date: trade.date, totalPnL: 0, tradeCount: 0 };
-        }
-        acc[trade.date].totalPnL += trade.pnl;
-        acc[trade.date].tradeCount += 1;
-        return acc;
-      },
-      {} as Record<string, DailySummary>,
+  // Build daily summaries for calendar from API data
+  const dailySummaries: Record<string, DailySummary> = {};
+  
+  daily.forEach((day: any) => {
+    dailySummaries[day.date] = {
+      accountId: day.account_id || '',
+      date: day.date || '',
+      totalPnL: day.total_profit || 0,
+      totalTrades: day.total_trades || 0,
+      missedTrades: day.missed_trades || 0,
+      wins: day.wins || 0,
+      losses: day.losses || 0,
+      winRate: day.win_rate || 0,
+      profitFactor: day.profit_factor || 0,
+      averageWin: day.average_win || 0,
+      averageLoss: day.average_loss || 0,
+      averageRR: day.average_rr || 0,
+      bestWin: day.best_win || 0,
+      worstLoss: day.worst_loss || 0,
+      averageTradeDuration: day.average_trade_duration || '0m',
+      avgWinStreak: day.avg_win_streak || 0,
+      maxWinStreak: day.max_win_streak || 0,
+      avgLossStreak: day.avg_loss_streak || 0,
+      maxLossStreak: day.max_loss_streak || 0,
+      recoveryFactor: day.recovery_factor || 0,
+      maxDrawdown: day.max_drawdown || 0,
+      totalVolume: day.total_volume || 0,
+      totalCommission: day.total_commission || 0,
+      zellaScore: day.zella_score || 0,
+      winRateScore: day.win_rate_score || 0,
+      profitFactorScore: day.profit_factor_score || 0,
+      avgWinLossScore: day.avg_win_loss_score || 0,
+      recoveryFactorScore: day.recovery_factor_score || 0,
+      maxDrawdownScore: day.max_drawdown_score || 0,
+      tradeIds: day.trade_ids || [],
+      totalComments: day.total_comments || 0,
+    };
+  });
+
+  // Build equity curve from daily data (calculated on backend)
+  const equityData: [string, number][] = (() => {
+    let cumulativePnL = 0;
+    const sortedDaily = [...daily].sort((a: any, b: any) =>
+      new Date(a.date).getTime() - new Date(b.date).getTime()
     );
-  }, [trades]);
+    return sortedDaily.map((day: any) => {
+      cumulativePnL += day.total_profit || 0;
+      return [day.date, cumulativePnL] as [string, number];
+    });
+  })();
 
-  const equityData = useMemo(() => {
-    let cumulative = 0;
-    return [...trades]
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .map((t) => {
-        cumulative += t.pnl;
-        return [t.date, cumulative];
-      });
-  }, [trades]);
+  // Chart data from backend (calculated on backend)
+  const pnlByDayOfWeek = charts?.pnl_by_day_of_week || { days: [], data: [], trade_count: [] };
+  const winRateByDayOfWeek = charts?.win_rate_by_day_of_week || [];
+  const tradesBySession = charts?.trades_by_session || { London: 0, NY: 0, Other: 0 };
+  const pnlByTimeHeld = charts?.pnl_by_time_held || { labels: [], wins: [], losses: [] };
+  const pnlByWeek = charts?.pnl_by_week || [];
+  const scatterData = charts?.scatter_data || { winning: [], losing: [] };
+
+  // Monthly totals from backend
+  const monthlyTotals = monthly.length > 0 ? {
+    pnl: monthly[0].total_profit || 0,
+    count: monthly[0].total_trades || 0,
+  } : { pnl: 0, count: 0 };
 
   const equityOption = {
     tooltip: { trigger: "axis" },
@@ -53,8 +128,14 @@ const AnalyticView: React.FC<AnalyticViewProps> = ({ trades, onDayClick }) => {
       top: "5%",
       containLabel: true,
     },
+    
     xAxis: {
+      axisLine: {
+            show: true,
+            onZero: false // Ensures the y-axis crosses the x-axis at x=0
+        },
       type: "category",
+    
       data: equityData.map((d) => d[0]),
       axisLabel: { color: "#94a3b8", fontSize: 10 },
     },
@@ -87,7 +168,8 @@ const AnalyticView: React.FC<AnalyticViewProps> = ({ trades, onDayClick }) => {
     ],
   };
 
-  const radarOption = (title: string) => ({
+  // Radar chart option - using data from backend
+  const radarOption = (title: string, sessionData: number[]) => ({
     title: {
       text: title,
       left: "center",
@@ -108,7 +190,7 @@ const AnalyticView: React.FC<AnalyticViewProps> = ({ trades, onDayClick }) => {
         type: "radar",
         data: [
           {
-            value: [80, 60, 40],
+            value: sessionData,
             itemStyle: { color: "#ff4d00" },
             areaStyle: { color: "rgba(255, 77, 0, 0.3)" },
           },
@@ -117,10 +199,12 @@ const AnalyticView: React.FC<AnalyticViewProps> = ({ trades, onDayClick }) => {
     ],
   });
 
-  const barOption = (color: string) => ({
+  // Bar chart option - using data from backend
+  const barOptionPnLByDay = {
+    tooltip: { trigger: "axis" },
     xAxis: {
       type: "category",
-      data: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      data: pnlByDayOfWeek.days || [],
       axisLabel: { fontSize: 9 },
     },
     yAxis: {
@@ -130,34 +214,100 @@ const AnalyticView: React.FC<AnalyticViewProps> = ({ trades, onDayClick }) => {
     },
     grid: { top: 10, bottom: 20, left: 0, right: 0 },
     series: [
-      { data: [0, 50, 45, 55, 40, 52, 0], type: "bar", itemStyle: { color } },
+      {
+        data: (pnlByDayOfWeek.data || []).map((v: number) => ({
+          value: v,
+          itemStyle: { color: v >= 0 ? "#10b981" : "#f87171" }
+        })),
+        type: "bar"
+      },
     ],
-  });
+  };
 
-  const scatterOption = {
+  // Trade distribution by day - using data from backend
+  const barOptionTradeDist = {
+    tooltip: { trigger: "axis" },
     xAxis: {
       type: "category",
-      data: ["0m", "32m", "1h 4m", "1h 36m", "2h 8m", "2h 40m"],
+      data: pnlByDayOfWeek.days || [],
       axisLabel: { fontSize: 9 },
     },
-    yAxis: { type: "value", min: -2000, max: 3000, axisLabel: { fontSize: 9 } },
-    grid: { top: 20, bottom: 30, left: 40, right: 10 },
+    yAxis: {
+      type: "value",
+      axisLabel: { show: false },
+      splitLine: { show: false },
+    },
+    grid: { top: 10, bottom: 20, left: 0, right: 0 },
     series: [
       {
-        data: Array.from({ length: 50 }, () => [
-          Math.random() * 5,
-          Math.random() * 2000 + 500,
-        ]),
-        type: "scatter",
-        itemStyle: { color: "#10b981", opacity: 0.8 },
+        data: pnlByDayOfWeek.trade_count || [],
+        type: "bar",
+        itemStyle: { color: "#ff4d00" }
+      },
+    ],
+  };
+
+  // Bar chart option for P&L by time held - using data from backend
+  const barOptionTimeHeld = {
+    tooltip: { trigger: "axis" },
+    xAxis: {
+      type: "category",
+      data: pnlByTimeHeld.labels || [],
+      axisLabel: { fontSize: 9 },
+    },
+    yAxis: {
+      type: "value",
+      axisLabel: { fontSize: 9 },
+      splitLine: { lineStyle: { color: "#f1f5f9" } },
+    },
+    grid: { top: 10, bottom: 20, left: 30, right: 10 },
+    series: [
+      {
+        name: "Wins",
+        data: pnlByTimeHeld.wins || [],
+        type: "bar",
+        itemStyle: { color: "#10b981" },
       },
       {
-        data: Array.from({ length: 30 }, () => [
-          Math.random() * 2,
-          Math.random() * -1000 - 100,
-        ]),
+        name: "Losses",
+        data: pnlByTimeHeld.losses || [],
+        type: "bar",
+        itemStyle: { color: "#f87171" },
+      },
+    ],
+  };
+
+  // Scatter chart for duration vs P&L - using data from backend
+  const scatterOption = {
+    tooltip: { trigger: "item" },
+    xAxis: {
+      type: "value",
+      name: "Minutes",
+      nameLocation: "middle",
+      nameGap: 25,
+      axisLabel: { fontSize: 9 },
+    },
+    yAxis: {
+      type: "value",
+      name: "P&L",
+      axisLabel: { fontSize: 9 },
+      splitLine: { lineStyle: { color: "#f1f5f9" } }
+    },
+    grid: { top: 20, bottom: 40, left: 50, right: 10 },
+    series: [
+      {
+        name: "Wins",
+        data: scatterData.winning || [],
         type: "scatter",
-        itemStyle: { color: "#f87171", opacity: 0.8 },
+        symbolSize: 8,
+        itemStyle: { color: "#10b981", opacity: 0.7 },
+      },
+      {
+        name: "Losses",
+        data: scatterData.losing || [],
+        type: "scatter",
+        symbolSize: 8,
+        itemStyle: { color: "#f87171", opacity: 0.7 },
       },
     ],
   };
@@ -166,32 +316,36 @@ const AnalyticView: React.FC<AnalyticViewProps> = ({ trades, onDayClick }) => {
     <div className="space-y-6 pb-20 animate-in fade-in duration-500 max-w-full overflow-x-hidden">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <AnalyticCard
-          label="Account Balance"
-          value="$213,798.59"
-          subValue="113.8%"
-          iconBg="bg-primary"
-          icon="🏦"
-        />
-        <AnalyticCard
           label="Net P&L"
           value={`$${totalPnL.toLocaleString()}`}
-          subValue="113.8%"
+          subValue={`${totalTrades} Trades`}
           iconBg="bg-primary"
           icon="📈"
+          tooltip="Total profit/loss from all trades"
         />
         <AnalyticCard
           label="Win Rate"
           value={`${winRate.toFixed(2)}%`}
-          subValue={`${winnersCount}W/${losersCount}L`}
+          subValue={`${winners}W/${losers}L`}
           iconBg="bg-primary"
           icon="%"
+          tooltip="Percentage of winning trades"
         />
         <AnalyticCard
           label="Profit Factor"
-          value="2.74"
-          subValue="$432.69 Avg. P/L"
+          value={profitFactor.toFixed(2)}
+          subValue={`$${(averageWin - averageLoss).toFixed(2)} Avg. P/L`}
           iconBg="bg-primary"
           icon="$"
+          tooltip="Ratio of gross profit to gross loss"
+        />
+        <AnalyticCard
+          label="Total Trades"
+          value={totalTrades.toString()}
+          subValue={`$${totalCommission.toFixed(2)} Commission`}
+          iconBg="bg-primary"
+          icon="🏦"
+          tooltip="Total number of executed trades"
         />
       </div>
 
@@ -204,6 +358,7 @@ const AnalyticView: React.FC<AnalyticViewProps> = ({ trades, onDayClick }) => {
             option={equityOption}
             style={{ height: "100%", width: "100%" }}
             notMerge={true}
+          
             lazyUpdate={false}
             key={equityData.length}
           />
@@ -214,51 +369,51 @@ const AnalyticView: React.FC<AnalyticViewProps> = ({ trades, onDayClick }) => {
         <StatsTable
           title="Overview"
           items={[
-            { label: "Total Trades", value: trades.length.toString() },
-            { label: "Missed Trades", value: "17" },
-            { label: "Average RR", value: "1.53" },
-            { label: "Average Trade Duration", value: "1h 1m" },
+            { label: "Total Trades", value: totalTrades.toString() },
+            { label: "Average RR", value: averageRR.toFixed(2) },
+            { label: "Average Trade Duration", value: avgTradeDuration },
             { label: "Win Rate", value: `${winRate.toFixed(2)}%` },
-            { label: "Average Profit/Loss", value: "$432.69" },
+            { label: "Average P/L", value: `$${((averageWin - averageLoss)).toFixed(2)}` },
+            { label: "Total Commission", value: `$${totalCommission.toFixed(2)}` },
           ]}
         />
         <StatsTable
           title="Winning Trades"
           items={[
-            { label: "Total Winners", value: winnersCount.toString() },
-            { label: "Average Trade Duration", value: "1h 21m" },
-            { label: "Average Win Streak", value: "2.23" },
-            { label: "Max Win Streak", value: "10" },
-            { label: "Average Win", value: "1.22%" },
-            { label: "Best Win", value: "2.49%" },
+            { label: "Total Winners", value: winners.toString() },
+            { label: "Average Trade Duration", value: avgTradeDuration },
+            { label: "Average Win Streak", value: avgWinStreak.toString() },
+            { label: "Max Win Streak", value: maxWinStreak.toString() },
+            { label: "Average Win", value: `$${averageWin.toFixed(2)}` },
+            { label: "Best Win", value: `$${bestWin.toFixed(2)}` },
           ]}
         />
         <StatsTable
           title="Losing Trades"
           items={[
-            { label: "Total Losers", value: losersCount.toString() },
-            { label: "Average Trade Duration", value: "36m" },
-            { label: "Average Loss Streak", value: "1.84" },
-            { label: "Max Loss Streak", value: "5" },
-            { label: "Average Loss", value: "-0.56%" },
-            { label: "Worst Loss", value: "-1.20%" },
+            { label: "Total Losers", value: losers.toString() },
+            { label: "Average Trade Duration", value: avgTradeDuration },
+            { label: "Average Loss Streak", value: avgLossStreak.toString() },
+            { label: "Max Loss Streak", value: maxLossStreak.toString() },
+            { label: "Average Loss", value: `$${averageLoss.toFixed(2)}` },
+            { label: "Worst Loss", value: `$${worstLoss.toFixed(2)}` },
           ]}
         />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          "Profit by Session",
-          "Win Rate by Session",
-          "Trades by Session",
-          "Avg Profitable RR",
-        ].map((title) => (
+          { title: "Profit by Session", data: [tradesBySession.London, tradesBySession.NY, tradesBySession.Other] },
+          { title: "Win Rate by Session", data: [winRateByDayOfWeek[1], winRateByDayOfWeek[4], Math.round((winRateByDayOfWeek[0] + winRateByDayOfWeek[2] + winRateByDayOfWeek[3] + winRateByDayOfWeek[5] + winRateByDayOfWeek[6]) / 5)] },
+          { title: "Trades by Session", data: [tradesBySession.London, tradesBySession.NY, tradesBySession.Other] },
+          { title: "Avg Profitable RR", data: [averageRR * 2, averageRR, 0] },
+        ].map(({ title, data }) => (
           <div
             key={title}
             className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm h-52 sm:h-60"
           >
             <ReactECharts
-              option={radarOption(title)}
+              option={radarOption(title, data)}
               style={{ height: "100%" }}
             />
           </div>
@@ -266,31 +421,31 @@ const AnalyticView: React.FC<AnalyticViewProps> = ({ trades, onDayClick }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartBox title="P&L By Time" controls={["30 Minutes", "1 Hour"]}>
+        <ChartBox title="P&L By Day" controls={["Total"]}>
           <div className="h-[200px] sm:h-[250px]">
             <ReactECharts
-              option={barOption("#10b981")}
+              option={barOptionPnLByDay}
               style={{ height: "100%" }}
             />
           </div>
         </ChartBox>
-        <ChartBox title="P&L By Day" controls={["Separate", "Total"]}>
+        <ChartBox title="Trade Distribution by Day">
           <div className="h-[200px] sm:h-[250px]">
             <ReactECharts
-              option={barOption("#10b981")}
+              option={barOptionTradeDist}
               style={{ height: "100%" }}
             />
           </div>
         </ChartBox>
         <ChartBox title="Profit by Time Held">
           <div className="h-[200px] sm:h-[250px]">
-            <ReactECharts option={scatterOption} style={{ height: "100%" }} />
+            <ReactECharts option={barOptionTimeHeld} style={{ height: "100%" }} />
           </div>
         </ChartBox>
-        <ChartBox title="Trade Distribution by Day">
+        <ChartBox title="Duration vs P&L">
           <div className="h-[200px] sm:h-[250px]">
             <ReactECharts
-              option={barOption("#ff4d00")}
+              option={scatterOption}
               style={{ height: "100%" }}
             />
           </div>
@@ -304,7 +459,7 @@ const AnalyticView: React.FC<AnalyticViewProps> = ({ trades, onDayClick }) => {
             month={calDate.month}
             onMonthChange={(y, m) => setCalDate({ year: y, month: m })}
             dailySummaries={dailySummaries}
-            onDayClick={openDayDetails}
+            onDayClick={setSelectedDayDate}
             selectedDate={null}
           />
         </div>
@@ -315,54 +470,94 @@ const AnalyticView: React.FC<AnalyticViewProps> = ({ trades, onDayClick }) => {
             </h4>
           </div>
           <div className="flex-1 divide-y divide-slate-50 overflow-y-auto">
-            {["Week 1", "Week 2", "Week 3", "Week 4", "Week 5", "Week 6"].map(
-              (week, idx) => (
+            {pnlByWeek.length > 0 ? pnlByWeek.map((weekData: any, idx: number) => {
+              const pnlValue = Number(weekData.pnl) || 0;
+              const countValue = Number(weekData.count) || 0;
+              return (
                 <div
-                  key={week}
+                  key={weekData.week}
                   className={`p-4 flex justify-between items-center transition-colors ${idx === 0 ? "bg-rose-50/30" : "hover:bg-slate-50"}`}
                 >
                   <span className="text-xs font-bold text-slate-600">
-                    {week}
+                    {weekData.week}
                   </span>
                   <div className="text-right">
                     <p
-                      className={`text-xs font-black ${idx === 0 ? "text-rose-500" : "text-slate-400"}`}
+                      className={`text-xs font-black ${pnlValue >= 0 ? "text-emerald-500" : "text-rose-500"}`}
                     >
-                      {idx === 0 ? "-$416.43" : "$0.00"}
+                      {pnlValue >= 0 ? `$${pnlValue.toFixed(2)}` : `-$${Math.abs(pnlValue).toFixed(2)}`}
                     </p>
                     <p className="text-[9px] font-bold text-slate-300 uppercase">
-                      {idx === 0 ? "1 Trade" : "0 Trades"}
+                      {countValue} {countValue === 1 ? 'Trade' : 'Trades'}
                     </p>
                   </div>
                 </div>
-              ),
-            )}
+              );
+            }) : (
+                <div className="p-4 text-center text-slate-400 text-xs">
+                  No trade data available
+                </div>
+              )
+            }
           </div>
-          <div className="p-4 bg-rose-50 flex justify-between items-center border-t-2 border-rose-100 mt-auto">
-            <span className="text-xs font-black text-rose-600 uppercase tracking-widest">
+          <div className={`p-4 flex justify-between items-center border-t-2 ${Number(monthlyTotals.pnl) >= 0 ? "bg-emerald-50 border-emerald-100" : "bg-rose-50 border-rose-100"} mt-auto`}>
+            <span className={`text-xs font-black uppercase tracking-widest ${Number(monthlyTotals.pnl) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
               Monthly Total
             </span>
             <div className="text-right">
-              <p className="text-sm font-black text-rose-600">-$416.43</p>
-              <p className="text-[9px] font-bold text-rose-400 uppercase">
-                1 Trade
+              <p className={`text-sm font-black ${Number(monthlyTotals.pnl) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                {Number(monthlyTotals.pnl) >= 0 ? `$${Number(monthlyTotals.pnl).toFixed(2)}` : `-$${Math.abs(Number(monthlyTotals.pnl)).toFixed(2)}`}
+              </p>
+              <p className={`text-[9px] font-bold uppercase ${Number(monthlyTotals.pnl) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                {Number(monthlyTotals.count)} {Number(monthlyTotals.count) === 1 ? 'Trade' : 'Trades'}
               </p>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Day Details Modal */}
+      <DayDetailsModal
+        isOpen={!!selectedDayDate && !commentEditorState}
+        onClose={() => setSelectedDayDate(null)}
+        date={selectedDayDate || ""}
+        trades={[]}
+        summary={selectedDayDate ? dailySummaries[selectedDayDate] : undefined}
+        onAddTrade={() => {/* Navigate to add trade */}}
+        onEditComment={(type) => setCommentEditorState({ isOpen: true, type })}
+      />
+
+      {/* Comment Editor */}
+      {commentEditorState?.isOpen && selectedDayDate && (
+        <CommentEditor
+          date={selectedDayDate}
+          type={commentEditorState.type}
+          initialContent=""
+          onSave={() => setCommentEditorState(null)}
+          onClose={() => setCommentEditorState(null)}
+        />
+      )}
     </div>
   );
 };
 
-const AnalyticCard = ({ label, value, subValue, iconBg, icon }: any) => (
+const AnalyticCard = ({ label, value, subValue, iconBg, icon, tooltip }: any) => (
   <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex items-center justify-between hover:border-[#ff4d00]/30 transition-all group">
     <div className="flex-1 min-w-0">
       <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1 flex items-center gap-1 truncate">
         {label}{" "}
-        <span className="text-slate-200 group-hover:text-slate-400 transition-colors cursor-help">
-          ⓘ
-        </span>
+        {tooltip && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-slate-200 group-hover:text-slate-400 transition-colors cursor-help">
+                ⓘ
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{tooltip}</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
       </p>
       <p className="text-2xl font-black text-slate-800 tracking-tight truncate">
         {value}

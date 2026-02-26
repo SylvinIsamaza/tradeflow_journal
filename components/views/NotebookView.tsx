@@ -3,7 +3,7 @@ import React, { useState, useMemo } from "react";
 import ReactQuill from "react-quill-new";
 import "react-quill-new/dist/quill.snow.css";
 import { Folder, Note } from "../../types";
-import { useNotes, useFolders, useCreateNote, useUpdateNote, useDeleteNote, useCreateFolder, useDeleteFolder } from "@/lib/hooks";
+import { useNotes, useFolders, useCreateNote, useUpdateNote, useDeleteNote, useCreateFolder, useUpdateFolder, useDeleteFolder } from "@/lib/hooks";
 import { useApp } from "@/app/AppContext";
 
 const NotebookView: React.FC = () => {
@@ -12,18 +12,24 @@ const NotebookView: React.FC = () => {
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [isAddingFolder, setIsAddingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  const [editingFolderName, setEditingFolderName] = useState("");
+  const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
   const [editedTitle, setEditedTitle] = useState("");
   const [editedContent, setEditedContent] = useState("");
   
   const { data: folders = [], isLoading: foldersLoading } = useFolders(selectedAccount?.id);
-  const { data: notes = [], isLoading: notesLoading } = useNotes({ 
+  const notesResponse = useNotes({
     account_id: selectedAccount?.id,
-    folder_id: selectedFolderId || undefined 
+    folder_id: selectedFolderId || undefined
   });
+  const notes = notesResponse.data?.notes || [];
+  const isLoading = notesResponse.isLoading;
   const createNoteMutation = useCreateNote();
   const updateNoteMutation = useUpdateNote();
   const deleteNoteMutation = useDeleteNote();
   const createFolderMutation = useCreateFolder();
+  const updateFolderMutation = useUpdateFolder();
   const deleteFolderMutation = useDeleteFolder();
 
   // Mobile view state: 'folders', 'notes', 'editor'
@@ -142,7 +148,35 @@ const NotebookView: React.FC = () => {
     }
   };
 
-  if (foldersLoading || notesLoading) {
+  const handleDeleteFolder = (folderId: string) => {
+    setDeletingFolderId(folderId);
+  };
+
+  const confirmDeleteFolder = () => {
+    if (deletingFolderId) {
+      deleteFolderMutation.mutate(deletingFolderId);
+      if (selectedFolderId === deletingFolderId) {
+        setSelectedFolderId(null);
+        setSelectedNoteId(null);
+      }
+      setDeletingFolderId(null);
+    }
+  };
+
+  const handleEditFolder = (folderId: string, currentName: string) => {
+    setEditingFolderId(folderId);
+    setEditingFolderName(currentName);
+  };
+
+  const handleUpdateFolder = () => {
+    if (editingFolderId && editingFolderName.trim()) {
+      updateFolderMutation.mutate({ id: editingFolderId, name: editingFolderName.trim() });
+      setEditingFolderId(null);
+      setEditingFolderName("");
+    }
+  };
+
+  if (foldersLoading || isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -153,15 +187,23 @@ const NotebookView: React.FC = () => {
   const selectFolder = (id: string) => {
     setSelectedFolderId(id);
     setSelectedNoteId(null);
+    setEditedTitle("");
+    setEditedContent("");
     setMobilePane("notes");
   };
 
   const selectNote = (id: string) => {
-    setSelectedNoteId(id);
-    setMobilePane("editor");
+    const note = notes.find(n => n.id === id);
+    if (note) {
+      setSelectedNoteId(id);
+      setEditedTitle(note.title);
+      setEditedContent(note.content);
+      setMobilePane("editor");
+    }
   };
 
   return (
+    <>
     <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl flex flex-col md:flex-row h-[calc(100vh-140px)] overflow-hidden animate-in fade-in zoom-in-95 duration-300 shadow-sm relative">
       {/* Mobile Header Nav */}
       <div className="flex md:hidden bg-slate-50 border-b border-slate-100 p-2 shrink-0">
@@ -247,13 +289,53 @@ const NotebookView: React.FC = () => {
               Folders
             </div>
             <div className="space-y-1.5">
-              {folders.map((f) => (
+            {folders.map((f) => (
                 <div
+                   onClick={() => selectFolder(f.id)}
                   key={f.id}
-                  onClick={() => selectFolder(f.id)}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-between cursor-pointer transition-all ${selectedFolderId === f.id ? "bg-white text-[#5e5ce6] shadow-sm border border-slate-100" : "text-slate-500 hover:bg-slate-50"}`}
+                  className={`group px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-between cursor-pointer transition-all ${selectedFolderId === f.id ? "bg-white text-[#5e5ce6] shadow-sm border border-slate-100" : "text-slate-500 hover:bg-slate-50"}`}
                 >
-                  {f.name}
+                  {editingFolderId === f.id ? (
+                    <input
+                      autoFocus
+                      type="text"
+                      value={editingFolderName}
+                      onChange={(e) => setEditingFolderName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleUpdateFolder();
+                        if (e.key === "Escape") setEditingFolderId(null);
+                      }}
+                      onBlur={handleUpdateFolder}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex-1 bg-transparent border-b border-[#5e5ce6] outline-none"
+                    />
+                  ) : (
+                    <span >{f.name}</span>
+                  )}
+                  <div className="flex gap-1  transition-opacity">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditFolder(f.id, f.name);
+                      }}
+                      className="p-1 hover:bg-indigo-100 rounded text-indigo-500"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteFolder(f.id);
+                      }}
+                      className="p-1 hover:bg-rose-100 rounded text-rose-500"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -365,6 +447,7 @@ const NotebookView: React.FC = () => {
                 }}
               >
                 <ReactQuill
+                  key={selectedNote.id}
                   value={editedContent}
                   onChange={setEditedContent}
                   modules={modules}
@@ -391,6 +474,31 @@ const NotebookView: React.FC = () => {
         )}
       </div>
     </div>
+
+    {/* Delete Confirmation Modal */}
+    {deletingFolderId && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl animate-in fade-in zoom-in-95 duration-200">
+          <h3 className="text-lg font-black text-slate-800 mb-2">Delete Folder?</h3>
+          <p className="text-sm text-slate-600 mb-6">This will permanently delete the folder and all its notes. This action cannot be undone.</p>
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setDeletingFolderId(null)}
+              className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmDeleteFolder}
+              className="px-4 py-2 text-sm font-bold text-white bg-rose-500 rounded-xl hover:bg-rose-600 transition-colors"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 

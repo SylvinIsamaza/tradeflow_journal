@@ -1,81 +1,368 @@
-import React, { useState } from "react";
-import Modal from "../Modal";
+ import React, { useState, useEffect } from "react";
+ import Modal from "../Modal";
+ import { useCurrentUser, useChangePassword } from "@/lib/hooks";
+ import { authApi } from "@/lib/api/auth";
+ 
+ type ActiveModal =
+   | "edit"
+   | "password"
+   | "deactivate"
+   | "timezone"
+   | "auth"
+   | null;
+ 
+ const ProfileView: React.FC = () => {
+   const { data: user, isLoading, refetch } = useCurrentUser();
+   const changePasswordMutation = useChangePassword();
+   
+   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
+   const [profileData, setProfileData] = useState({
+     name: "",
+     location: "",
+     email: "",
+     timezone: "",
+     bio: "",
+   });
+   const [passwordData, setPasswordData] = useState({
+     current: "",
+     new: "",
+     confirm: "",
+   });
+ 
+   const [otpValue, setOtpValue] = useState(["", "", "", "", "", ""]);
+   const [isAccountDeleted, setIsAccountDeleted] = useState(false);
+   const [is2FAEnabled, setIs2FAEnabled] = useState(false);
+   const [is2FASetupMode, setIs2FASetupMode] = useState(false);
+   const [tempAuthSecret, setTempAuthSecret] = useState("");
+   const [tempQrUrl, setTempQrUrl] = useState("");
+   const [backupCodes, setBackupCodes] = useState<string[]>([]);
+   const [showBackupCodes, setShowBackupCodes] = useState(false);
+   const [disablePassword, setDisablePassword] = useState("");
+   const [isSubmitting, setIsSubmitting] = useState(false);
+ 
+   useEffect(() => {
+     if (user) {
+       setProfileData({
+         name: user.name || "",
+         location: user.location || "",
+         email: user.email || "",
+         timezone: user.timezone || "America/New_York",
+         bio: user.bio || "",
+       });
+       setIs2FAEnabled(user.is_two_factor_enabled || false);
+     }
+   }, [user]);
+ 
+   const handleUpdateProfile = async () => {
+     try {
+       // Use privateClient to update profile via PUT /users/me
+       const { privateClient } = await import('@/lib/api/axios');
+       await privateClient.put('/users/me', {
+         name: profileData.name,
+         location: profileData.location,
+         timezone: profileData.timezone,
+         bio: profileData.bio,
+       });
+       await refetch();
+       closeModal();
+     } catch (error) {
+       alert('Failed to update profile');
+     }
+   };
+ 
+   const handleChangePassword = async () => {
+     if (passwordData.new !== passwordData.confirm) {
+       alert('Passwords do not match');
+       return;
+     }
+     setIsSubmitting(true);
+     try {
+       const result = await authApi.changePassword(passwordData.current, passwordData.new);
+       if (result.success) {
+         setPasswordData({ current: "", new: "", confirm: "" });
+         closeModal();
+         alert('Password changed successfully');
+       } else {
+         alert(result.error || 'Failed to change password');
+       }
+     } catch (error) {
+       alert('Failed to change password');
+     } finally {
+       setIsSubmitting(false);
+     }
+   };
+ 
+   const timezones = [
+     // North America
+     "America/New_York",
+     "America/Chicago",
+     "America/Denver",
+     "America/Los_Angeles",
+     "America/Phoenix",
+     "America/Anchorage",
+     "America/Toronto",
+     "America/Vancouver",
+     "America/Mexico_City",
+     // Europe
+     "Europe/London",
+     "Europe/Paris",
+     "Europe/Berlin",
+     "Europe/Madrid",
+     "Europe/Rome",
+     "Europe/Amsterdam",
+     "Europe/Brussels",
+     "Europe/Vienna",
+     "Europe/Zurich",
+     "Europe/Stockholm",
+     "Europe/Oslo",
+     "Europe/Warsaw",
+     "Europe/Prague",
+     "Europe/Athens",
+     "Europe/Helsinki",
+     "Europe/Dublin",
+     "Europe/Lisbon",
+     // Asia
+     "Asia/Tokyo",
+     "Asia/Shanghai",
+     "Asia/Hong_Kong",
+     "Asia/Singapore",
+     "Asia/Seoul",
+     "Asia/Mumbai",
+     "Asia/Dubai",
+     "Asia/Bangkok",
+     "Asia/Jakarta",
+     "Asia/Manila",
+     "Asia/Kuala_Lumpur",
+     "Asia/Taipei",
+     "Asia/Ho_Chi_Minh",
+     "Asia/Kolkata",
+     // Australia/Pacific
+     "Australia/Sydney",
+     "Australia/Melbourne",
+     "Australia/Brisbane",
+     "Australia/Perth",
+     "Australia/Adelaide",
+     "Pacific/Auckland",
+     "Pacific/Honolulu",
+     "Pacific/Fiji",
+     // Africa
+     "Africa/Cairo",
+     "Africa/Johannesburg",
+     "Africa/Lagos",
+     "Africa/Nairobi",
+     "Africa/Casablanca",
+     // South America
+     "America/Sao_Paulo",
+     "America/Buenos_Aires",
+     "America/Bogota",
+     "America/Lima",
+     "America/Santiago",
+     // UTC
+     "UTC",
+   ];
+ 
+   const getTimezoneDisplay = (tz: string) => {
+     const tzMap: Record<string, string> = {
+       // North America
+       "America/New_York": "UTC-5 (EST)",
+       "America/Chicago": "UTC-6 (CST)",
+       "America/Denver": "UTC-7 (MST)",
+       "America/Los_Angeles": "UTC-8 (PST)",
+       "America/Phoenix": "UTC-7 (MST)",
+       "America/Anchorage": "UTC-9 (AKST)",
+       "America/Toronto": "UTC-5 (EST)",
+       "America/Vancouver": "UTC-8 (PST)",
+       "America/Mexico_City": "UTC-6 (CST)",
+       // Europe
+       "Europe/London": "UTC+0 (GMT)",
+       "Europe/Paris": "UTC+1 (CET)",
+       "Europe/Berlin": "UTC+1 (CET)",
+       "Europe/Madrid": "UTC+1 (CET)",
+       "Europe/Rome": "UTC+1 (CET)",
+       "Europe/Amsterdam": "UTC+1 (CET)",
+       "Europe/Brussels": "UTC+1 (CET)",
+       "Europe/Vienna": "UTC+1 (CET)",
+       "Europe/Zurich": "UTC+1 (CET)",
+       "Europe/Stockholm": "UTC+1 (CET)",
+       "Europe/Oslo": "UTC+1 (CET)",
+       "Europe/Warsaw": "UTC+1 (CET)",
+       "Europe/Prague": "UTC+1 (CET)",
+       "Europe/Athens": "UTC+2 (EET)",
+       "Europe/Helsinki": "UTC+2 (EET)",
+       "Europe/Dublin": "UTC+0 (GMT)",
+       "Europe/Lisbon": "UTC+0 (WET)",
+       // Asia
+       "Asia/Tokyo": "UTC+9 (JST)",
+       "Asia/Shanghai": "UTC+8 (CST)",
+       "Asia/Hong_Kong": "UTC+8 (HKT)",
+       "Asia/Singapore": "UTC+8 (SGT)",
+       "Asia/Seoul": "UTC+9 (KST)",
+       "Asia/Mumbai": "UTC+5:30 (IST)",
+       "Asia/Dubai": "UTC+4 (GST)",
+       "Asia/Bangkok": "UTC+7 (ICT)",
+       "Asia/Jakarta": "UTC+7 (WIB)",
+       "Asia/Manila": "UTC+8 (PHT)",
+       "Asia/Kuala_Lumpur": "UTC+8 (MYT)",
+       "Asia/Taipei": "UTC+8 (TST)",
+       "Asia/Ho_Chi_Minh": "UTC+7 (ICT)",
+       "Asia/Kolkata": "UTC+5:30 (IST)",
+       // Australia/Pacific
+       "Australia/Sydney": "UTC+10 (AEDT)",
+       "Australia/Melbourne": "UTC+10 (AEDT)",
+       "Australia/Brisbane": "UTC+10 (AEST)",
+       "Australia/Perth": "UTC+8 (AWST)",
+       "Australia/Adelaide": "UTC+9:30 (ACDT)",
+       "Pacific/Auckland": "UTC+12 (NZDT)",
+       "Pacific/Honolulu": "UTC-10 (HST)",
+       "Pacific/Fiji": "UTC+12 (FJT)",
+       // Africa
+       "Africa/Cairo": "UTC+2 (EET)",
+       "Africa/Johannesburg": "UTC+2 (SAST)",
+       "Africa/Lagos": "UTC+1 (WAT)",
+       "Africa/Nairobi": "UTC+3 (EAT)",
+       "Africa/Casablanca": "UTC+1 (WET)",
+       // South America
+       "America/Sao_Paulo": "UTC-3 (BRT)",
+       "America/Buenos_Aires": "UTC-3 (ART)",
+       "America/Bogota": "UTC-5 (COT)",
+       "America/Lima": "UTC-5 (PET)",
+       "America/Santiago": "UTC-3 (CLT)",
+       // UTC
+       "UTC": "UTC+0",
+     };
+     return tzMap[tz] || tz;
+   };
+ 
+   const handleOtpChange = (index: number, value: string) => {
+     if (value.length > 1) return;
+     const newOtp = [...otpValue];
+     newOtp[index] = value;
+     setOtpValue(newOtp);
+     // Auto-focus next
+     if (value && index < 5) {
+       const nextInput = document.getElementById(`otp-${index + 1}`);
+       nextInput?.focus();
+     }
+   };
+ 
+   const handleSetup2FA = async () => {
+     setIsSubmitting(true);
+     setShowBackupCodes(false);
+     setIs2FASetupMode(true);
+     try {
+       const result = await authApi.setup2FA();
+       if (result.success && result.secret && result.qr_code_url) {
+         setTempAuthSecret(result.secret);
+         setTempQrUrl(result.qr_code_url);
+         setBackupCodes(result.backup_codes || []);
+         setActiveModal("auth");
+       } else {
+         alert(result.error || 'Failed to setup 2FA');
+         setIs2FASetupMode(false);
+       }
+     } catch (error) {
+       alert('Failed to setup 2FA');
+       setIs2FASetupMode(false);
+     } finally {
+       setIsSubmitting(false);
+     }
+   };
+ 
+   const handleEnable2FA = async () => {
+     const code = otpValue.join("");
+     if (!code) {
+       alert('Please enter the verification code');
+       return;
+     }
+     setIsSubmitting(true);
+     try {
+       const result = await authApi.enable2FA(code);
+       if (result.success) {
+         // Show backup codes instead of closing immediately
+         if (result.backup_codes && result.backup_codes.length > 0) {
+           setBackupCodes(result.backup_codes);
+           setShowBackupCodes(true);
+           setIs2FAEnabled(true);
+           setIs2FASetupMode(false);
+         } else {
+           setIs2FAEnabled(true);
+           setIs2FASetupMode(false);
+           setOtpValue(["", "", "", "", "", ""]);
+           setTempAuthSecret("");
+           setTempQrUrl("");
+           closeModal();
+           alert('2FA enabled successfully');
+         }
+         refetch();
+       } else {
+         alert(result.error || 'Failed to enable 2FA');
+       }
+     } catch (error) {
+       alert('Failed to enable 2FA');
+     } finally {
+       setIsSubmitting(false);
+     }
+   };
+ 
+   const handleDisable2FA = async () => {
+     if (!disablePassword) {
+       alert('Please enter your password');
+       return;
+     }
+     setIsSubmitting(true);
+     try {
+       const result = await authApi.disable2FA(disablePassword);
+       if (result.success) {
+         setIs2FAEnabled(false);
+         setDisablePassword("");
+         closeModal();
+         alert('2FA disabled successfully');
+         refetch();
+       } else {
+         alert(result.error || 'Failed to disable 2FA');
+       }
+     } catch (error) {
+       alert('Failed to disable 2FA');
+     } finally {
+       setIsSubmitting(false);
+     }
+   };
+ 
+   const handleDeactivate = async () => {
+     setIsSubmitting(true);
+     try {
+       const result = await authApi.deactivateAccount();
+       if (result.success) {
+         setIsAccountDeleted(true);
+         setActiveModal(null);
+       } else {
+         alert(result.error || 'Failed to deactivate account');
+       }
+     } catch (error) {
+       alert('Failed to deactivate account');
+     } finally {
+       setIsSubmitting(false);
+     }
+   };
+ 
+   const closeModal = () => {
+     setActiveModal(null);
+     setOtpValue(["", "", "", "", "", ""]);
+     setTempAuthSecret("");
+     setTempQrUrl("");
+     setBackupCodes([]);
+     setShowBackupCodes(false);
+     setDisablePassword("");
+     setIs2FASetupMode(false);
+   };
 
-type ActiveModal =
-  | "edit"
-  | "password"
-  | "deactivate"
-  | "timezone"
-  | "auth"
-  | null;
-
-const ProfileView: React.FC = () => {
-  const [activeModal, setActiveModal] = useState<ActiveModal>(null);
-  const [profileData, setProfileData] = useState({
-    name: "Felix 'The Bull' Trader",
-    location: "New York, USA",
-    email: "felix@tradezella.com",
-    timezone: "America/New_York",
-    bio: "Focused on intraday supply and demand zones. Trading since 2021.",
-  });   
-
-  const [otpValue, setOtpValue] = useState(["", "", "", "", "", ""]);
-  const [isAccountDeleted, setIsAccountDeleted] = useState(false);
-  const [is2FAEnabled, setIs2FAEnabled] = useState(true);
-  const [tempAuthSecret, setTempAuthSecret] = useState("");
-
-  const timezones = [
-    "America/New_York",
-    "America/Chicago",
-    "America/Denver",
-    "America/Los_Angeles",
-    "Europe/London",
-    "Europe/Paris",
-    "Europe/Tokyo",
-    "Asia/Shanghai",
-    "Australia/Sydney",
-    "UTC",
-  ];
-
-  const getTimezoneDisplay = (tz: string) => {
-    const tzMap: Record<string, string> = {
-      "America/New_York": "UTC-5 (EST)",
-      "America/Chicago": "UTC-6 (CST)",
-      "America/Denver": "UTC-7 (MST)",
-      "America/Los_Angeles": "UTC-8 (PST)",
-      "Europe/London": "UTC+0 (GMT)",
-      "Europe/Paris": "UTC+1 (CET)",
-      "Europe/Tokyo": "UTC+9 (JST)",
-      "Asia/Shanghai": "UTC+8 (CST)",
-      "Australia/Sydney": "UTC+10 (AEDT)",
-      UTC: "UTC+0",
-    };
-    return tzMap[tz] || tz;
-  };
-
-  const handleOtpChange = (index: number, value: string) => {
-    if (value.length > 1) return;
-    const newOtp = [...otpValue];
-    newOtp[index] = value;
-    setOtpValue(newOtp);
-    // Auto-focus next
-    if (value && index < 5) {
-      const nextInput = document.getElementById(`otp-${index + 1}`);
-      nextInput?.focus();
-    }
-  };
-
-  const handleDeactivate = () => {
-    const code = otpValue.join("");
-    if (code === "123456") {
-      setIsAccountDeleted(true);
-      setActiveModal(null);
-    } else {
-      alert("Invalid OTP. Hint: 123456");
-    }
-  };
-
-  const closeModal = () => setActiveModal(null);
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
 
   if (isAccountDeleted) {
     return (
@@ -215,8 +502,12 @@ const ProfileView: React.FC = () => {
             </div>
             <button
               onClick={() => {
-                setTempAuthSecret("JBSWY3DPEBLW64TMMQ======");
-                setActiveModal("auth");
+                if (!is2FAEnabled) {
+                  handleSetup2FA();
+                } else {
+                  setIs2FASetupMode(false);
+                  setActiveModal("auth");
+                }
               }}
               className={`w-full ${is2FAEnabled ? "text-rose-500 border-rose-100 hover:border-rose-200" : "bg-slate-50 border-slate-200"} border py-3 rounded-xl text-xs font-black ${is2FAEnabled ? "text-slate-600" : ""} uppercase tracking-widest hover:bg-slate-100 transition-all`}
             >
@@ -249,8 +540,17 @@ const ProfileView: React.FC = () => {
             {timezones.map((tz) => (
               <button
                 key={tz}
-                onClick={() => {
+                onClick={async () => {
                   setProfileData({ ...profileData, timezone: tz });
+                  try {
+                    const { privateClient } = await import('@/lib/api/axios');
+                    await privateClient.put('/users/me', {
+                      timezone: tz,
+                    });
+                    await refetch();
+                  } catch (error) {
+                    console.error('Failed to update timezone:', error);
+                  }
                   closeModal();
                 }}
                 className={`p-4 rounded-xl border-2 text-left transition-all font-bold text-sm ${
@@ -282,86 +582,161 @@ const ProfileView: React.FC = () => {
         isOpen={activeModal === "auth"}
         onClose={closeModal}
         title={
-          is2FAEnabled
+          is2FAEnabled && !is2FASetupMode && !showBackupCodes
             ? "Disable Two-Factor Authentication"
             : "Enable Two-Factor Authentication"
         }
       >
         <div className="p-8 space-y-8">
-          {!is2FAEnabled ? (
+          {is2FASetupMode || showBackupCodes ? (
             <>
-              <div className="space-y-4">
-                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
-                  <p className="text-sm text-blue-800 font-bold mb-2">
-                    How it works:
-                  </p>
-                  <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
-                    <li>Download Google Authenticator or Authy</li>
-                    <li>Scan the QR code below or enter the secret key</li>
-                    <li>Enter the 6-digit code to confirm setup</li>
-                  </ol>
-                </div>
+              {showBackupCodes ? (
+                // Show backup codes after successful enable
+                <div className="space-y-4">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+                    <p className="text-sm text-emerald-800 font-bold mb-2">
+                      ✅ 2FA Enabled Successfully!
+                    </p>
+                    <p className="text-xs text-emerald-700">
+                      Save these backup codes in a secure location. You can use them to access your account if you lose your authenticator device.
+                    </p>
+                  </div>
 
-                <div className="bg-slate-100 p-8 rounded-2xl flex items-center justify-center">
-                  <div className="bg-white p-4 rounded-xl border-4 border-slate-300">
-                    {/* QR Code Placeholder */}
-                    <div className="w-40 h-40 bg-slate-200 flex items-center justify-center text-slate-500 text-xs font-bold text-center">
-                      QR Code
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        Backup Codes
+                      </label>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(backupCodes.join('\n'));
+                          alert('Backup codes copied to clipboard!');
+                        }}
+                        className="text-[10px] font-black text-[#5e5ce6] hover:underline"
+                      >
+                        Copy All
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {backupCodes.map((code, idx) => (
+                        <code key={idx} className="font-mono text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 text-center">
+                          {code}
+                        </code>
+                      ))}
                     </div>
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Manual Entry Key (if QR won't scan)
-                  </label>
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center justify-between">
-                    <code className="font-mono text-sm font-black text-slate-700">
-                      {tempAuthSecret}
-                    </code>
-                    <button className="text-[#5e5ce6] hover:text-[#4d4acb] transition-colors">
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                        />
-                      </svg>
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => {
+                        setIs2FAEnabled(true);
+                        setOtpValue(["", "", "", "", "", ""]);
+                        setTempAuthSecret("");
+                        setTempQrUrl("");
+                        setBackupCodes([]);
+                        setShowBackupCodes(false);
+                        closeModal();
+                      }}
+                      className="w-full bg-emerald-600 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-emerald-100 hover:bg-emerald-700 active:scale-95 transition-all"
+                    >
+                      I've Saved My Backup Codes
                     </button>
                   </div>
                 </div>
+              ) : (
+                // 2FA Setup flow
+                <>
+                  <div className="space-y-4">
+                    <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+                      <p className="text-sm text-blue-800 font-bold mb-2">
+                        How it works:
+                      </p>
+                      <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
+                        <li>Download Google Authenticator or Authy</li>
+                        <li>Scan the QR code below or enter the secret key</li>
+                        <li>Enter the 6-digit code to confirm setup</li>
+                      </ol>
+                    </div>
 
-                <EditField
-                  label="Enter 6-Digit Code"
-                  placeholder="000000"
-                  type="text"
-                  maxLength="6"
-                />
-              </div>
+                    <div className="bg-slate-100 p-8 rounded-2xl flex items-center justify-center">
+                      <div className="bg-white p-4 rounded-xl border-4 border-slate-300">
+                        {/* QR Code - rendered from URL if available */}
+                        {tempQrUrl ? (
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(tempQrUrl)}`}
+                            alt="2FA QR Code"
+                            className="w-40 h-40"
+                          />
+                        ) : (
+                          <div className="w-40 h-40 bg-slate-200 flex items-center justify-center text-slate-500 text-xs font-bold text-center">
+                            QR Code
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
-              <div className="space-y-3">
-                <button
-                  onClick={() => {
-                    setIs2FAEnabled(true);
-                    closeModal();
-                  }}
-                  className="w-full bg-emerald-600 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-emerald-100 hover:bg-emerald-700 active:scale-95 transition-all"
-                >
-                  Confirm & Enable 2FA
-                </button>
-                <button
-                  onClick={closeModal}
-                  className="w-full bg-slate-50 text-slate-400 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-100 transition-all"
-                >
-                  Cancel
-                </button>
-              </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        Manual Entry Key (if QR won't scan)
+                      </label>
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center justify-between">
+                        <code className="font-mono text-sm font-black text-slate-700">
+                          {tempAuthSecret}
+                        </code>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(tempAuthSecret);
+                            alert('Secret key copied!');
+                          }}
+                          className="text-[#5e5ce6] hover:text-[#4d4acb] transition-colors"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+
+                    <EditField
+                      label="Enter 6-Digit Code"
+                      placeholder="000000"
+                      type="text"
+                      maxLength="6"
+                      value={otpValue.join("")}
+                      onChange={(v: string) => {
+                        const newOtp = v.slice(0, 6).split("").concat(Array(6).fill("")).slice(0, 6);
+                        setOtpValue(newOtp);
+                      }}
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <button
+                      onClick={handleEnable2FA}
+                      disabled={isSubmitting}
+                      className="w-full bg-emerald-600 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-emerald-100 hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      {isSubmitting ? 'Processing...' : 'Confirm & Enable 2FA'}
+                    </button>
+                    <button
+                      onClick={closeModal}
+                      className="w-full bg-slate-50 text-slate-400 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-100 transition-all"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              )}
             </>
           ) : (
             <>
@@ -380,19 +755,19 @@ const ProfileView: React.FC = () => {
                 <input
                   type="password"
                   placeholder="Enter your password"
+                  value={disablePassword}
+                  onChange={(e) => setDisablePassword(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-rose-500/20 transition-all"
                 />
               </div>
 
               <div className="space-y-3">
                 <button
-                  onClick={() => {
-                    setIs2FAEnabled(false);
-                    closeModal();
-                  }}
-                  className="w-full bg-rose-600 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-rose-100 hover:bg-rose-700 active:scale-95 transition-all"
+                  onClick={handleDisable2FA}
+                  disabled={isSubmitting}
+                  className="w-full bg-rose-600 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-rose-100 hover:bg-rose-700 active:scale-95 transition-all disabled:opacity-50"
                 >
-                  Disable 2FA
+                  {isSubmitting ? 'Processing...' : 'Disable 2FA'}
                 </button>
                 <button
                   onClick={closeModal}
@@ -457,7 +832,7 @@ const ProfileView: React.FC = () => {
           </div>
           <div className="flex gap-4">
             <button
-              onClick={closeModal}
+              onClick={handleUpdateProfile}
               className="flex-1 bg-[#5e5ce6] text-white py-3 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
             >
               Save Changes
@@ -483,20 +858,26 @@ const ProfileView: React.FC = () => {
             label="Current Password"
             type="password"
             placeholder="••••••••"
+            value={passwordData.current}
+            onChange={(v: string) => setPasswordData({ ...passwordData, current: v })}
           />
           <EditField
             label="New Password"
             type="password"
             placeholder="Enter new password"
+            value={passwordData.new}
+            onChange={(v: string) => setPasswordData({ ...passwordData, new: v })}
           />
           <EditField
             label="Confirm New Password"
             type="password"
             placeholder="Confirm new password"
+            value={passwordData.confirm}
+            onChange={(v: string) => setPasswordData({ ...passwordData, confirm: v })}
           />
           <div className="space-y-3 pt-4">
             <button
-              onClick={closeModal}
+              onClick={handleChangePassword}
               className="w-full bg-[#5e5ce6] text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-indigo-100 active:scale-95 transition-all"
             >
               Update Password

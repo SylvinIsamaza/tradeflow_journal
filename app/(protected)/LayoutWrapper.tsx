@@ -26,7 +26,8 @@ export default function LayoutWrapper({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { data: accountsData = [], isLoading: accountsLoading } = useAccounts();
+  const { data: accountsResponse, isLoading: accountsLoading } = useAccounts();
+  const accountsData = accountsResponse?.accounts || [];
   
   const {
     selectedAccount,
@@ -49,6 +50,19 @@ export default function LayoutWrapper({
   const accounts: Account[] = accountsData.length > 0 ? accountsData : [
     { id: "acc-1", userId: "user-1", brokerName: "Demo Broker", baseCurrency: "USD", name: "Demo account", type: AccountType.DEMO, createdAt: "2024-01-01T00:00:00Z" },
   ];
+
+  // Auto-select account from localStorage or first account when accounts are loaded
+  React.useEffect(() => {
+    if (!accountsLoading && accountsData.length > 0) {
+      const storedAccountId = localStorage.getItem('selectedAccountId');
+      const accountToSelect = storedAccountId 
+        ? accountsData.find(acc => acc.id === storedAccountId) || accountsData[0]
+        : accountsData[0];
+      
+      setSelectedAccount(accountToSelect);
+      localStorage.setItem('selectedAccountId', accountToSelect.id);
+    }
+  }, [accountsLoading, accountsData, setSelectedAccount]);
 
   const {
     selectedDate,

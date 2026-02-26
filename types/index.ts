@@ -20,13 +20,17 @@ export interface User {
   // Authentication
   passwordHash?: string;
   isTwoFactorEnabled?: boolean;
+  is_two_factor_enabled?: boolean; // Backend returns snake_case
   twoFactorSecret?: string;
+  two_factor_secret?: string;
   twoFactorBackupCodes?: string[];
+  two_factor_backup_codes?: string[];
   passwordResetToken?: string;
   passwordResetExpires?: string;
   lastPasswordReset?: string;
   failedLoginAttempts?: number;
   lockUntil?: string;
+  is_active?: boolean;
   
   // Profile fields
   name?: string;
@@ -652,4 +656,12 @@ export type ReportTab = 'Time' | 'Day' | 'Month' | 'Symbol' | 'Tags' | 'Setups';
 export interface Message {
   role: 'user' | 'model';
   text: string;
+}
+
+// Pagination
+export interface PaginationInfo {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }

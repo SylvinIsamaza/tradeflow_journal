@@ -1,13 +1,8 @@
 import React, { useState, useRef } from "react";
 import { Trade, TradeSide, TradeStatus, Strategy } from "../../types";
 import TradeEditor from "../TradeEditor";
-import {
-  parseMetaTrader5HTML,
-  parseMetaTrader5Excel,
-  validateTrades,
-  ParsedTrade,
-  mapSideToTradeSide,
-} from "../../utils/importParsers";
+import { usePreviewImport, useImportTrades } from "@/lib/hooks";
+import { useApp } from "@/app/AppContext";
 
 interface AddTradeViewProps {
   onSave: (trade: Omit<Trade, "accountId">) => void;
@@ -20,11 +15,16 @@ const AddTradeView: React.FC<AddTradeViewProps> = ({
   onCancel,
   availableStrategies,
 }) => {
+  const { selectedAccount } = useApp();
+  const previewMutation = usePreviewImport();
+  const importMutation = useImportTrades();
+  
   const [mode, setMode] = useState<
     "selection" | "manual" | "import" | "file-select" | "trade-select"
   >("selection");
-  const [parsedTrades, setParsedTrades] = useState<ParsedTrade[]>([]);
+  const [parsedTrades, setParsedTrades] = useState<any[]>([]);
   const [selectedTrades, setSelectedTrades] = useState<Set<number>>(new Set());
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [parseError, setParseError] = useState<string>("");
 
@@ -32,33 +32,23 @@ const AddTradeView: React.FC<AddTradeViewProps> = ({
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file || !selectedAccount) return;
 
     setParseError("");
+    setSelectedFile(file);
+    
     try {
-      let trades: ParsedTrade[] = [];
+      const result = await previewMutation.mutateAsync({
+        accountId: selectedAccount.id,
+        file,
+      });
 
-      if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
-        trades = await parseMetaTrader5Excel(file);
-      } else if (file.name.endsWith(".html")) {
-        const text = await file.text();
-        
-        trades = parseMetaTrader5HTML(text);
-      } else {
-        throw new Error(
-          "Please upload an Excel file (.xlsx, .xls) or MetaTrader 5 HTML report",
-        );
-      }
-
-      // Validate trades
-      trades = validateTrades(trades);
-
-      if (trades.length === 0) {
+      if (result.preview.length === 0) {
         throw new Error("No valid trades found in the file");
       }
 
-      setParsedTrades(trades);
-      setSelectedTrades(new Set(trades.map((_, i) => i)));
+      setParsedTrades(result.preview);
+      setSelectedTrades(new Set(result.preview.map((_: any, i: number) => i)));
       setMode("trade-select");
     } catch (error) {
       setParseError(
@@ -77,51 +67,30 @@ const AddTradeView: React.FC<AddTradeViewProps> = ({
     setSelectedTrades(newSelected);
   };
 
-  const importSelectedTrades = () => {
-    Array.from(selectedTrades).forEach((index) => {
-      const trade = parsedTrades[index];
-      const entryDate = new Date(trade.entryDate);
-      const exitDate = new Date(trade.exitDate);
-      const durationDays = Math.ceil(
-        (exitDate.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24)
-      );
-      
-      onSave({
-        id: `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        symbol: trade.symbol,
-        entryPrice: trade.entry,
-        exitPrice: trade.exit,
-        closePrice: trade.exit,
-        side: mapSideToTradeSide(trade.side),
-        quantity: trade.quantity,
-        date: trade.entryDate,
-        time: entryDate.toLocaleTimeString('en-US', { hour12: false }),
-        duration: durationDays.toString(),
-        tradeType: "Swing",
-        executionType: "Market",
-        stopLoss: 0,
-        takeProfit: 0,
-        commission: trade.commission || 0,
-        swap: trade.swap || 0,
-        pnl: trade.profitLoss,
-        status:
-          trade.profitLoss > 0 ? TradeStatus.WIN : trade.profitLoss < 0 ? TradeStatus.LOSS : TradeStatus.BE,
-        setups: [],
-        generalTags: [],
-        exitTags: [],
-        processTags: [],
-        notes: `Imported from MT5 | P&L: $${trade.profitLoss.toFixed(2)} | Entry: ${trade.entryDate} | Exit: ${trade.exitDate}`,
-        executedAt: `${trade.entryDate}T00:00:00Z`,
+  const importSelectedTrades = async () => {
+    if (!selectedFile || !selectedAccount) return;
+    
+    try {
+      await importMutation.mutateAsync({
+        accountId: selectedAccount.id,
+        file: selectedFile,
       });
-    });
-    setMode("selection");
-    setParsedTrades([]);
-    setSelectedTrades(new Set());
+      
+      setMode("selection");
+      setParsedTrades([]);
+      setSelectedTrades(new Set());
+      setSelectedFile(null);
+      onCancel();
+    } catch (error) {
+      setParseError(
+        error instanceof Error ? error.message : "Failed to import trades",
+      );
+    }
   };
 
   if (mode === "manual") {
     return (
-      <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="mb-6 flex items-center justify-between">
           <button
             onClick={() => setMode("selection")}
@@ -341,7 +310,7 @@ const AddTradeView: React.FC<AddTradeViewProps> = ({
                       Entry
                     </p>
                     <p className="text-sm font-black text-slate-800 truncate">
-                      ${trade.entry.toFixed(3)}
+                      ${trade.entry_price?.toFixed(3) || 0}
                     </p>
                   </div>
                   <div className="min-w-0">
@@ -349,7 +318,7 @@ const AddTradeView: React.FC<AddTradeViewProps> = ({
                       Exit
                     </p>
                     <p className="text-sm font-black text-slate-800 truncate">
-                      ${trade.exit.toFixed(3)}
+                      ${trade.exit_price?.toFixed(3) || 0}
                     </p>
                   </div>
                   <div className="min-w-0">
@@ -365,9 +334,9 @@ const AddTradeView: React.FC<AddTradeViewProps> = ({
                       P&L
                     </p>
                     <p
-                      className={`text-sm font-black ${trade.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}`}
+                      className={`text-sm font-black ${trade.pnl >= 0 ? "text-emerald-600" : "text-red-600"}`}
                     >
-                      ${trade.profitLoss.toFixed(2)}
+                      ${trade.pnl?.toFixed(2) || 0}
                     </p>
                   </div>
                 </div>

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { strategiesApi } from '@/lib/api/strategies';
+import { PaginationInfo } from '@/types';
 
 export const strategyKeys = {
   all: ['strategies'] as const,
@@ -9,10 +10,10 @@ export const strategyKeys = {
   detail: (id: string) => [...strategyKeys.details(), id] as const,
 };
 
-export function useStrategies(accountId?: string) {
-  return useQuery({
+export function useStrategies(accountId?: string, limit: number = 50, offset: number = 0) {
+  return useQuery<{ strategies: any[]; pagination: PaginationInfo }>({
     queryKey: strategyKeys.list(accountId),
-    queryFn: () => strategiesApi.getAll(accountId),
+    queryFn: () => strategiesApi.getAll(accountId, limit, offset),
   });
 }
 

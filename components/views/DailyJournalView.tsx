@@ -2,27 +2,48 @@
 
 import React, { useState, useEffect } from "react";
 import ReactECharts from "echarts-for-react";
-import { Trade, DailySummary } from "../../types";
+import { Trade, DailySummary, CommentType } from "../../types";
 import { formatCurrency, getMonthName } from "../../utils";
-import { useDayDetails } from "@/app/(protected)/DayDetailsContext";
+import DayDetailsModal from "../DayDetailsModal";
+import dynamic from "next/dynamic";
+
+const CommentEditor = dynamic(() => import("../CommentEditor"), {
+  ssr: false,
+});
 
 interface DailyJournalViewProps {
   trades: Trade[];
   summaries: Record<string, DailySummary>;
+  selectedDate?: string | null;
   onDayClick?: (date: string) => void;
 }
 
 const DailyJournalView: React.FC<DailyJournalViewProps> = ({
   trades,
   summaries,
+  selectedDate,
   onDayClick,
 }) => {
-  const [calDate, setCalDate] = useState({ year: 2024, month: 5 }); // June 2024
-  const { openDayDetails } = useDayDetails();
-  const dates = Object.keys(summaries).sort(
-    (a, b) => new Date(b).getTime() - new Date(a).getTime(),
+  const [calDate, setCalDate] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
+  const [selectedDayDate, setSelectedDayDate] = useState<string | null>(null);
+  const [commentEditorState, setCommentEditorState] = useState<{ isOpen: boolean; type: CommentType } | null>(null);
+  const dates = React.useMemo(
+    () => Object.keys(summaries).sort(
+      (a, b) => new Date(b).getTime() - new Date(a).getTime(),
+    ),
+    [summaries]
   );
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+
+  // Auto-expand the selected date
+  useEffect(() => {
+    if (selectedDate) {
+      setExpandedDates((prev) => new Set([...prev, selectedDate]));
+    }
+  }, [selectedDate]);
 
   const toggleExpand = (date: string) => {
     const newExpanded = new Set(expandedDates);
@@ -108,10 +129,12 @@ const DailyJournalView: React.FC<DailyJournalViewProps> = ({
                 {d}
               </div>
             ))}
-            {Array.from({ length: 30 }).map((_, i) => {
+            {Array.from({ length: new Date(calDate.year, calDate.month + 1, 0).getDate() }).map((_, i) => {
               const day = i + 1;
               const dateStr = `${calDate.year}-${(calDate.month + 1).toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
               const summary = summaries[dateStr];
+              const today = new Date();
+              const isToday = today.getFullYear() === calDate.year && today.getMonth() === calDate.month && today.getDate() === day;
 
               let highlight = "text-slate-400 hover:bg-slate-50";
               if (summary) {
@@ -120,12 +143,15 @@ const DailyJournalView: React.FC<DailyJournalViewProps> = ({
                     ? "bg-emerald-500 text-white shadow-lg shadow-emerald-200"
                     : "bg-rose-500 text-white shadow-lg shadow-rose-200";
               }
+              if (isToday) {
+                highlight = "ring-2 ring-indigo-500 ring-offset-2 text-indigo-600 font-bold";
+              }
 
               return (
                 <div
                   key={i}
-                  onClick={() => summary && openDayDetails(dateStr)}
-                  className={`text-[10px] font-black p-2 rounded-lg transition-all cursor-pointer ${highlight} ${!summary ? "cursor-default opacity-50" : "hover:scale-110"}`}
+                  onClick={() => onDayClick?.(dateStr)}
+                  className={`text-[10px] font-black p-2 rounded-lg transition-all cursor-pointer ${highlight} ${!summary ? "cursor-pointer hover:bg-slate-100" : "hover:scale-110"}`}
                 >
                   {day}
                 </div>
@@ -136,42 +162,115 @@ const DailyJournalView: React.FC<DailyJournalViewProps> = ({
       </div>
 
       <div className="flex-1 space-y-4">
-        {/* Global Expand/Collapse Buttons */}
-        <div className="flex justify-end gap-2 px-2">
-          <button
-            onClick={expandAll}
-            className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-all border border-indigo-100"
-          >
-            Expand All
-          </button>
-          <button
-            onClick={collapseAll}
-            className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-all border border-slate-200"
-          >
-            Collapse All
-          </button>
+        {/* Filter and Expand/Collapse Buttons */}
+        <div className="flex justify-between items-center gap-2 px-2">
+          {selectedDate ? (
+            <button
+              onClick={() => onDayClick?.(selectedDate === selectedDate ? "" : selectedDate)}
+              className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-all border border-indigo-100 flex items-center gap-2"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Clear Filter: {selectedDate}
+            </button>
+          ) : (
+            <div></div>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={expandAll}
+              className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-all border border-indigo-100"
+            >
+              Expand All
+            </button>
+            <button
+              onClick={collapseAll}
+              className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-all border border-slate-200"
+            >
+              Collapse All
+            </button>
+          </div>
         </div>
 
-        {dates.length === 0 ? (
+        {/* Filter dates to show only selected date */}
+        {(() => {
+          const filteredDates = selectedDate ? [selectedDate] : dates;
+          return filteredDates.length === 0 ? (
           <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-8 sm:p-16 text-center shadow-sm">
             <p className="text-slate-400 font-bold text-sm">
               No journal entries yet. Log a trade to get started.
             </p>
           </div>
-        ) : (
-          dates.map((date) => (
-            <JournalEntry
-              key={date}
-              date={date}
-              summary={summaries[date]}
-              trades={trades.filter((t) => t.date === date)}
-              onClick={() => openDayDetails(date)}
-              isExpanded={expandedDates.has(date)}
-              onToggleExpand={() => toggleExpand(date)}
-            />
-          ))
-        )}
+          ) : (
+            filteredDates.map((date) => (
+              <JournalEntry
+                key={`${date}-${trades.filter((t) => t.date === date).length}-${summaries[date]?.totalPnL || 0}`}
+                date={date}
+                summary={summaries[date] || {
+                  accountId: "",
+                  date: date,
+                  totalPnL: 0,
+                  totalTrades: 0,
+                  wins: 0,
+                  losses: 0,
+                  winRate: 0,
+                  profitFactor: 0,
+                  averageWin: 0,
+                  averageLoss: 0,
+                  averageRR: 0,
+                  bestWin: 0,
+                  worstLoss: 0,
+                  averageTradeDuration: "0",
+                  avgWinStreak: 0,
+                  maxWinStreak: 0,
+                  avgLossStreak: 0,
+                  maxLossStreak: 0,
+                  recoveryFactor: 0,
+                  maxDrawdown: 0,
+                  totalVolume: 0,
+                  totalCommission: 0,
+                  zellaScore: 0,
+                  winRateScore: 0,
+                  profitFactorScore: 0,
+                  avgWinLossScore: 0,
+                  recoveryFactorScore: 0,
+                  maxDrawdownScore: 0,
+                  tradeIds: [],
+                  totalComments: 0,
+                  missedTrades: 0,
+                }}
+                trades={trades.filter((t) => t.date === date)}
+                onClick={() => setSelectedDayDate(date)}
+                isExpanded={expandedDates.has(date)}
+                onToggleExpand={() => toggleExpand(date)}
+              />
+            ))
+          );
+        })()}
       </div>
+
+      {/* Day Details Modal */}
+      <DayDetailsModal
+        isOpen={!!selectedDayDate && !commentEditorState}
+        onClose={() => setSelectedDayDate(null)}
+        date={selectedDayDate || ""}
+        trades={trades.filter((t) => t.date === selectedDayDate)}
+        summary={selectedDayDate ? summaries[selectedDayDate] : undefined}
+        onAddTrade={() => {/* Navigate to add trade */}}
+        onEditComment={(type) => setCommentEditorState({ isOpen: true, type })}
+      />
+
+      {/* Comment Editor */}
+      {commentEditorState?.isOpen && selectedDayDate && (
+        <CommentEditor
+          date={selectedDayDate}
+          type={commentEditorState.type}
+          initialContent=""
+          onSave={() => setCommentEditorState(null)}
+          onClose={() => setCommentEditorState(null)}
+        />
+      )}
     </div>
   );
 };
@@ -184,17 +283,44 @@ const JournalEntry = ({
   isExpanded,
   onToggleExpand,
 }: any) => {
+  // Calculate cumulative PnL growth from trades
+  const pnlGrowthData = React.useMemo(() => {
+    if (!trades || trades.length === 0) {
+      return [0];
+    }
+    
+    // Sort trades by execution time
+    const sortedTrades = [...trades].sort((a, b) => {
+      const timeA = a.executedAt || a.closeTime || "";
+      const timeB = b.executedAt || b.closeTime || "";
+      return new Date(timeA).getTime() - new Date(timeB).getTime();
+    });
+    
+    // Build cumulative PnL array starting from 0
+    let cumulativePnL = 0;
+    const data = [0]; // Start at 0
+    
+    sortedTrades.forEach((trade) => {
+      cumulativePnL += trade.pnl || 0;
+      data.push(cumulativePnL);
+    });
+    
+    return data;
+  }, [trades]);
+
+  const isPositive = summary.totalPnL >= 0;
+
   const chartOption = {
     grid: { left: 5, right: 5, top: 10, bottom: 0 },
     xAxis: { type: "category", show: false },
     yAxis: { type: "value", show: false },
     series: [
       {
-        data: summary.totalPnL >= 0 ? [0, 40, 150, 185] : [0, 20, -50, -37.5],
+        data: pnlGrowthData,
         type: "line",
         smooth: true,
         lineStyle: {
-          color: summary.totalPnL >= 0 ? "#10b981" : "#f87171",
+          color: isPositive ? "#10b981" : "#f87171",
           width: 2,
         },
         areaStyle: {
@@ -207,10 +333,9 @@ const JournalEntry = ({
             colorStops: [
               {
                 offset: 0,
-                color:
-                  summary.totalPnL >= 0
-                    ? "rgba(16, 185, 129, 0.2)"
-                    : "rgba(248, 113, 113, 0.2)",
+                color: isPositive
+                  ? "rgba(16, 185, 129, 0.2)"
+                  : "rgba(248, 113, 113, 0.2)",
               },
               { offset: 1, color: "transparent" },
             ],
@@ -292,16 +417,20 @@ const JournalEntry = ({
             value={trades.filter((t: any) => t.pnl > 0).length}
           />
           <DataPoint
+            label="Lossers"
+            value={trades.filter((t: any) => t.pnl < 0).length}
+          />
+          <DataPoint
             label="Winrate"
             value={`${trades.length > 0 ? ((trades.filter((t: any) => t.pnl > 0).length / trades.length) * 100).toFixed(0) : 0}%`}
           />
           <DataPoint
             label="Avg Win"
             value={formatCurrency(
-              summary.totalPnL > 0 ? summary.totalPnL / trades.length : 0,
+             summary.totalPnL / trades.length ,
             )}
           />
-          <DataPoint label="Comms" value="$10.50" />
+          <DataPoint label="Comms" value={summary.totalCommission} />
           <DataPoint label="Volume" value={trades.length * 1000} />
         </div>
       </div>

@@ -143,7 +143,7 @@ export const authApi = {
   // Change password
   async changePassword(currentPassword: string, newPassword: string): Promise<AuthResult> {
     try {
-      await privateClient.post('/users/change-password', {
+      await privateClient.post('/auth/change-password', {
         current_password: currentPassword,
         new_password: newPassword,
       });
@@ -154,9 +154,97 @@ export const authApi = {
     }
   },
 
+  // Setup 2FA
+  async setup2FA(): Promise<{ success: boolean; secret?: string; qr_code_url?: string; backup_codes?: string[]; error?: string }> {
+    try {
+      const response = await privateClient.post<{
+        secret: string;
+        qr_code_url: string;
+        backup_codes: string[];
+      }>('/auth/2fa/setup');
+      return {
+        success: true,
+        secret: response.data.secret,
+        qr_code_url: response.data.qr_code_url,
+        backup_codes: response.data.backup_codes,
+      };
+    } catch (error: any) {
+      const message = error.response?.data?.detail || '2FA setup failed';
+      return { success: false, error: message };
+    }
+  },
+
+  // Enable 2FA
+  async enable2FA(code: string): Promise<{ success: boolean; error?: string; backup_codes?: string[] }> {
+    try {
+      const response = await privateClient.post<{ success: boolean; message: string; backup_codes?: string[] }>('/auth/2fa/enable', {
+        code,
+      });
+      return { success: true, backup_codes: response.data.backup_codes };
+    } catch (error: any) {
+      const message = error.response?.data?.detail || '2FA enable failed';
+      return { success: false, error: message };
+    }
+  },
+
+  // Disable 2FA
+  async disable2FA(password: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      await privateClient.post('/auth/2fa/disable', { password });
+      return { success: true };
+    } catch (error: any) {
+      const message = error.response?.data?.detail || '2FA disable failed';
+      return { success: false, error: message };
+    }
+  },
+
+  // Deactivate account
+  async deactivateAccount(): Promise<{ success: boolean; error?: string }> {
+    try {
+      await privateClient.delete('/users/me');
+      return { success: true };
+    } catch (error: any) {
+      const message = error.response?.data?.detail || 'Account deactivation failed';
+      return { success: false, error: message };
+    }
+  },
+
   // Check if authenticated
   isAuthenticated(): boolean {
     return isAuthenticated();
+  },
+
+  // Get user notifications
+  async getNotifications(): Promise<{ success: boolean; notifications?: any[]; error?: string }> {
+    try {
+      const response = await privateClient.get<any[]>('/auth/notifications');
+      return { success: true, notifications: response.data };
+    } catch (error: any) {
+      const message = error.response?.data?.detail || 'Failed to fetch notifications';
+      return { success: false, error: message };
+    }
+  },
+
+  // Mark notification as read
+  async markNotificationRead(notificationId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      await privateClient.post(`/auth/notifications/${notificationId}/read`);
+      return { success: true };
+    } catch (error: any) {
+      const message = error.response?.data?.detail || 'Failed to mark notification as read';
+      return { success: false, error: message };
+    }
+  },
+
+  // Mark all notifications as read
+  async markAllNotificationsRead(): Promise<{ success: boolean; error?: string }> {
+    try {
+      await privateClient.post('/auth/notifications/read-all');
+      return { success: true };
+    } catch (error: any) {
+      const message = error.response?.data?.detail || 'Failed to mark all notifications as read';
+      return { success: false, error: message };
+    }
   },
 };
 

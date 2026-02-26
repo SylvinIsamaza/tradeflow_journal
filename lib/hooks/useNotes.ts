@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { notesApi } from '@/lib/api/notes';
+import { PaginationInfo } from '@/types';
 
 export const noteKeys = {
   all: ['notes'] as const,
@@ -56,8 +57,10 @@ export function useNotes(filters: {
   tag?: string;
   start_date?: string;
   end_date?: string;
+  limit?: number;
+  offset?: number;
 } = {}) {
-  return useQuery({
+  return useQuery<{ notes: any[]; pagination: PaginationInfo }>({
     queryKey: noteKeys.list(filters),
     queryFn: () => notesApi.getAll(filters),
   });

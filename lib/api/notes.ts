@@ -1,5 +1,5 @@
 import { privateClient } from './axios';
-import { Note, Folder } from '@/types';
+import { Note, Folder, PaginationInfo } from '@/types';
 
 interface FolderResponse {
   id: string;
@@ -18,6 +18,14 @@ interface NoteResponse {
   date: string;
   created_at: string;
   updated_at: string | null;
+}
+
+interface PaginatedNoteResponse {
+  items: NoteResponse[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
 }
 
 const transformFolder = (f: FolderResponse): Folder => ({
@@ -61,23 +69,36 @@ export const notesApi = {
     await privateClient.delete(`/notes/folders/${id}`);
   },
 
-  // Notes
+  // Notes with pagination
   async getAll(filters: {
     account_id?: string;
     folder_id?: string;
     tag?: string;
     start_date?: string;
     end_date?: string;
-  } = {}): Promise<Note[]> {
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<{ notes: Note[]; pagination: PaginationInfo }> {
     const params = new URLSearchParams();
     if (filters.account_id) params.append('account_id', filters.account_id);
     if (filters.folder_id) params.append('folder_id', filters.folder_id);
     if (filters.tag) params.append('tag', filters.tag);
     if (filters.start_date) params.append('start_date', filters.start_date);
     if (filters.end_date) params.append('end_date', filters.end_date);
+    if (filters.limit) params.append('limit', filters.limit.toString());
+    else params.append('limit', '50');
+    if (filters.offset) params.append('offset', filters.offset.toString());
 
-    const response = await privateClient.get<NoteResponse[]>(`/notes/?${params.toString()}`);
-    return response.data.map(transformNote);
+    const response = await privateClient.get<PaginatedNoteResponse>(`/notes/?${params.toString()}`);
+    return {
+      notes: response.data.items.map(transformNote),
+      pagination: {
+        total: response.data.total,
+        page: response.data.page,
+        limit: response.data.limit,
+        totalPages: response.data.total_pages
+      }
+    };
   },
 
   async getById(id: string): Promise<Note | null> {

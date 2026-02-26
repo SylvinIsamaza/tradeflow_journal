@@ -1,5 +1,5 @@
 import { privateClient, publicClient } from './axios';
-import { Trade, TradeSide, TradeStatus } from '@/types';
+import { Trade, TradeSide, TradeStatus, PaginationInfo } from '@/types';
 
 // API response types matching backend schemas
 interface TradeResponse {
@@ -30,6 +30,14 @@ interface TradeResponse {
   date: string;
   time: string | null;
   close_time: string | null;
+}
+
+interface PaginatedTradeResponse {
+  items: TradeResponse[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
 }
 
 interface TradeFilters {
@@ -93,8 +101,8 @@ const transformTrade = (trade: TradeResponse): Trade => ({
 // ============================================
 
 export const tradesApi = {
-  // Get all trades with filters
-  async getAll(filters: TradeFilters = {}): Promise<Trade[]> {
+  // Get all trades with filters and pagination
+  async getAll(filters: TradeFilters = {}): Promise<{ trades: Trade[]; pagination: PaginationInfo }> {
     const params = new URLSearchParams();
     
     if (filters.account_id) params.append('account_id', filters.account_id);
@@ -104,11 +112,19 @@ export const tradesApi = {
     if (filters.status) params.append('status', filters.status);
     if (filters.symbol) params.append('symbol', filters.symbol);
     if (filters.limit) params.append('limit', filters.limit.toString());
+    else params.append('limit', '50');
     if (filters.offset) params.append('offset', filters.offset.toString());
 
-    const response = await privateClient.get<TradeResponse[]>(`/trades/?${params.toString()}`);
-    console.log("tradesSDFADS", response.data);
-    return response.data.map(transformTrade);
+    const response = await privateClient.get<PaginatedTradeResponse>(`/trades/?${params.toString()}`);
+    return {
+      trades: response.data.items.map(transformTrade),
+      pagination: {
+        total: response.data.total,
+        page: response.data.page,
+        limit: response.data.limit,
+        totalPages: response.data.total_pages
+      }
+    };
   },
 
   // Get single trade

@@ -1,5 +1,5 @@
 import { privateClient } from './axios';
-import { Account, AccountType } from '@/types';
+import { Account, AccountType, PaginationInfo } from '@/types';
 
 // API response types matching backend schemas
 interface AccountResponse {
@@ -10,6 +10,14 @@ interface AccountResponse {
   name: string;
   type: string;
   created_at: string;
+}
+
+interface PaginatedAccountResponse {
+  items: AccountResponse[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
 }
 
 interface CreateAccountRequest {
@@ -41,10 +49,20 @@ const transformAccount = (account: AccountResponse): Account => ({
 // ============================================
 
 export const accountsApi = {
-  // Get all accounts for current user
-  async getAll(): Promise<Account[]> {
-    const response = await privateClient.get<AccountResponse[]>('/accounts/');
-    return response.data.map(transformAccount);
+  // Get all accounts for current user with pagination
+  async getAll(limit: number = 50, offset: number = 0): Promise<{ accounts: Account[]; pagination: PaginationInfo }> {
+    const response = await privateClient.get<PaginatedAccountResponse>('/accounts/', {
+      params: { limit, offset }
+    });
+    return {
+      accounts: response.data.items.map(transformAccount),
+      pagination: {
+        total: response.data.total,
+        page: response.data.page,
+        limit: response.data.limit,
+        totalPages: response.data.total_pages
+      }
+    };
   },
 
   // Get single account

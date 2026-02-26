@@ -1,6 +1,10 @@
 
+"use client";
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Account, DateRange, Filters, TradeSide } from '../types';
+import { authApi } from '@/lib/api/auth';
+import { useRouter } from 'next/navigation';
 
 interface TopBarProps {
   onAddTrade: () => void;
@@ -17,13 +21,31 @@ interface TopBarProps {
   onToggleSidebar: () => void;
 }
 
-const TopBar: React.FC<TopBarProps> = ({ 
-  title, currency, onCurrencyChange, accounts, selectedAccount, 
+const TopBar: React.FC<TopBarProps> = ({
+  title, currency, onCurrencyChange, accounts, selectedAccount,
   onAccountChange, dateRange, onDateRangeChange, filters, onFiltersChange,
   onToggleSidebar
 }) => {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  
+  // Notifications state
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Fetch notifications
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      const result = await authApi.getNotifications();
+      if (result.success && result.notifications) {
+        setNotifications(result.notifications);
+        setUnreadCount(result.notifications.filter((n: any) => !n.is_read).length);
+      }
+    };
+    fetchNotifications();
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -34,6 +56,28 @@ const TopBar: React.FC<TopBarProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const handleMarkAllRead = async () => {
+    await authApi.markAllNotificationsRead();
+    setNotifications(notifications.map((n: any) => ({ ...n, is_read: true })));
+    setUnreadCount(0);
+  };
+
+  const handleNotificationClick = async (notification: any) => {
+    if (!notification.is_read) {
+      await authApi.markNotificationRead(notification.id);
+      setNotifications(notifications.map((n: any) =>
+        n.id === notification.id ? { ...n, is_read: true } : n
+      ));
+      setUnreadCount(Math.max(0, unreadCount - 1));
+    }
+    
+    // If it's a backup codes notification, navigate to profile
+    if (notification.type === "BACKUP_CODES") {
+      router.push("/profile");
+    }
+    setShowNotifications(false);
+  };
 
   const currencies = [
     { code: 'USD', symbol: '$' },
@@ -87,7 +131,71 @@ const TopBar: React.FC<TopBarProps> = ({
             </div>
           )}
         </div>
-
+ <div className="relative">
+          <button
+            onClick={() => setShowNotifications(!showNotifications)}
+            className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+          
+          {showNotifications && (
+            <div className="absolute top-full mt-2 right-0 w-80 bg-white border border-slate-100 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <h3 className="text-xs font-bold text-slate-700">Notifications</h3>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={handleMarkAllRead}
+                    className="text-[10px] text-indigo-600 hover:text-indigo-700 font-semibold"
+                  >
+                    Mark all as read
+                  </button>
+                )}
+              </div>
+              <div className="max-h-80 overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <div className="p-6 text-center text-slate-400 text-xs">
+                    No notifications
+                  </div>
+                ) : (
+                  notifications.slice(0, 10).map((notification: any) => (
+                    <button
+                      key={notification.id}
+                      onClick={() => handleNotificationClick(notification)}
+                      className={`w-full text-left p-3 border-b border-slate-100 hover:bg-slate-50 transition-colors ${
+                        !notification.is_read ? 'bg-indigo-50/50' : ''
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${!notification.is_read ? 'bg-indigo-500' : 'bg-slate-300'}`}></div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-[11px] font-semibold truncate ${!notification.is_read ? 'text-slate-800' : 'text-slate-500'}`}>
+                            {notification.title}
+                          </p>
+                          <p className="text-[10px] text-slate-400 line-clamp-2 mt-0.5">
+                            {notification.description}
+                          </p>
+                          {notification.type === "BACKUP_CODES" && (
+                            <span className="inline-block mt-1 text-[9px] text-amber-500 font-bold">
+                              ⚠️ Action needed
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
         {/* Date Range */}
         <div className="relative">
           <button 
@@ -138,9 +246,12 @@ const TopBar: React.FC<TopBarProps> = ({
           )}
         </div>
 
+        {/* Notifications Bell */}
+       
+
         {/* Account Selection */}
         <div className="relative">
-          <div 
+          <div
             onClick={() => setOpenMenu(openMenu === 'account' ? null : 'account')}
             className="flex items-center gap-2 sm:gap-3 bg-[#f5f6ff] border border-indigo-100 rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 cursor-pointer hover:bg-indigo-50 transition-all group"
           >
@@ -154,9 +265,13 @@ const TopBar: React.FC<TopBarProps> = ({
             <div className="absolute top-full mt-2 right-0 w-48 sm:w-56 bg-white border border-slate-100 rounded-xl shadow-xl p-2 animate-in fade-in slide-in-from-top-2 duration-200">
               <p className="text-[10px] font-bold text-slate-400 uppercase px-3 py-2">Select Account</p>
               {accounts.map(acc => (
-                <button 
+                <button
                   key={acc.id}
-                  onClick={() => { onAccountChange(acc); setOpenMenu(null); }}
+                  onClick={() => { 
+                    onAccountChange(acc); 
+                    localStorage.setItem('selectedAccountId', acc.id);
+                    setOpenMenu(null); 
+                  }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-colors ${selectedAccount.id === acc.id ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                    <div className={`w-4 h-4 rounded ${acc.type === 'DEMO' ? 'bg-slate-200' : 'bg-emerald-400'}`}></div>

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { tradesApi } from '@/lib/api/trades';
-import { Trade, TradeSide, TradeStatus } from '@/types';
+import { Trade, TradeSide, TradeStatus, PaginationInfo } from '@/types';
 
 // Query keys
 export const tradeKeys = {
@@ -26,7 +26,7 @@ export function useTrades(filters: {
   limit?: number;
   offset?: number;
 } = {}) {
-  return useQuery({
+  return useQuery<{ trades: Trade[]; pagination: PaginationInfo }>({
     queryKey: tradeKeys.list(filters),
     queryFn: () => tradesApi.getAll(filters),
   });

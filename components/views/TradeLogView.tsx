@@ -1,14 +1,19 @@
 import React, { useState, useMemo, useEffect } from "react";
 import ReactECharts from "echarts-for-react";
 import ExcelJS from "exceljs";
-import { Trade, AIInsight } from "../../types";
+import { Trade, AIInsight, PaginationInfo } from "../../types";
 import { formatCurrency } from "../../utils";
 import Table, { Column } from "../Table";
 import Modal from "../Modal";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getPerformanceInsights } from "../../services/geminiService";
 
 interface TradeLogViewProps {
   trades: Trade[];
+  onEditTrade?: (trade: Trade) => void;
+  pagination?: PaginationInfo;
+  onPageChange?: (page: number) => void;
+  onLimitChange?: (limit: number) => void;
 }
 
 const ALL_COLUMN_KEYS = [
@@ -33,7 +38,7 @@ const ALL_COLUMN_KEYS = [
 
 type ColumnKey = (typeof ALL_COLUMN_KEYS)[number];
 
-const TradeLogView: React.FC<TradeLogViewProps> = ({ trades }) => {
+const TradeLogView: React.FC<TradeLogViewProps> = ({ trades, onEditTrade, pagination, onPageChange, onLimitChange }) => {
   const [isColumnSettingsOpen, setIsColumnSettingsOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<"CSV" | "EXCEL">("CSV");
@@ -224,7 +229,7 @@ const TradeLogView: React.FC<TradeLogViewProps> = ({ trades }) => {
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      const fileName = `tradezella_export_${new Date().toISOString().split("T")[0]}.csv`;
+      const fileName = `tradeflow_export_${new Date().toISOString().split("T")[0]}.csv`;
       link.setAttribute("href", url);
       link.setAttribute("download", fileName);
       link.style.visibility = "hidden";
@@ -281,7 +286,7 @@ const TradeLogView: React.FC<TradeLogViewProps> = ({ trades }) => {
       });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      const fileName = `tradezella_export_${new Date().toISOString().split("T")[0]}.xlsx`;
+      const fileName = `tradeflow_export_${new Date().toISOString().split("T")[0]}.xlsx`;
       link.setAttribute("href", url);
       link.setAttribute("download", fileName);
       link.style.visibility = "hidden";
@@ -297,11 +302,19 @@ const TradeLogView: React.FC<TradeLogViewProps> = ({ trades }) => {
     <div className="space-y-6 animate-in fade-in duration-500 pb-12">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between h-[110px]">
-          <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5">
+          <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest flex items-center gap-1">
             Net cumulative P&L{" "}
             <span className="bg-slate-50 px-1.5 py-0.5 rounded text-[8px] text-slate-500">
               {trades.length}
             </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-slate-300 cursor-help ml-1">ⓘ</span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Total cumulative profit/loss across all trades</p>
+              </TooltipContent>
+            </Tooltip>
           </p>
           <div className="flex items-end justify-between">
             <span className="text-2xl font-black text-slate-800">$14,742</span>
@@ -315,11 +328,19 @@ const TradeLogView: React.FC<TradeLogViewProps> = ({ trades }) => {
             </div>
           </div>
         </div>
-        <MiniGaugeCard label="Profit factor" value="1.82" gauge={60} />
-        <MiniGaugeCard label="Trade win %" value="31.78%" gauge={31.78} />
+        <MiniGaugeCard label="Profit factor" value="1.82" gauge={60} tooltip="Ratio of gross profit to gross loss" />
+        <MiniGaugeCard label="Trade win %" value="31.78%" gauge={31.78} tooltip="Percentage of winning trades" />
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between h-[110px]">
-          <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">
+          <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest flex items-center gap-1">
             Avg win/loss trade
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-slate-300 cursor-help ml-1">ⓘ</span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Average profit per win vs average loss per losing trade</p>
+              </TooltipContent>
+            </Tooltip>
           </p>
           <div className="flex items-end justify-between">
             <span className="text-2xl font-black text-slate-800">3.90</span>
@@ -494,7 +515,16 @@ const TradeLogView: React.FC<TradeLogViewProps> = ({ trades }) => {
             </button>
           </div>
         </div>
-        <Table columns={tableColumns} data={trades} className="max-h-[600px]" />
+        <Table
+          columns={tableColumns}
+          data={trades}
+          className="max-h-[600px]"
+          onRowEdit={onEditTrade}
+          showEditButton={!!onEditTrade}
+          pagination={pagination}
+          onPageChange={onPageChange}
+          onLimitChange={onLimitChange}
+        />
       </div>
 
       {/* Column Settings Modal */}
@@ -648,10 +678,20 @@ const TradeLogView: React.FC<TradeLogViewProps> = ({ trades }) => {
   );
 };
 
-const MiniGaugeCard = ({ label, value, gauge }: any) => (
+const MiniGaugeCard = ({ label, value, gauge, tooltip }: any) => (
   <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between h-[110px] transition-all hover:border-[#5e5ce6]/20">
-    <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">
-      {label} <span className="text-slate-300 ml-1">ⓘ</span>
+    <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest flex items-center gap-1">
+      {label}{" "}
+      {tooltip && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="text-slate-300 cursor-help">ⓘ</span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{tooltip}</p>
+          </TooltipContent>
+        </Tooltip>
+      )}
     </p>
     <div className="flex items-end justify-between">
       <span className="text-2xl font-black text-slate-800 leading-none">

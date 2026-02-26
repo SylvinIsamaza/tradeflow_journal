@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLogout, useCurrentUser } from "@/lib/hooks";
 
 interface SidebarProps {
@@ -15,6 +16,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onTabChange,
   onOpenAI,
 }) => {
+  const router = useRouter();
   const { data: user } = useCurrentUser();
   const logoutMutation = useLogout();
 
@@ -78,7 +80,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <span className="text-white font-black italic">T</span>
           </div>
           <span className="text-xl font-bold text-white tracking-tight uppercase">
-            Trade<span className="text-slate-400 font-medium">Zella</span>
+            Trade<span className="text-slate-400 font-medium">Flow</span>
           </span>
         </div>
       </div>
@@ -167,6 +169,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </nav>
 
+
       <div className="p-4 border-t border-slate-700/50 space-y-4">
         <Link
           href="/settings"
@@ -208,7 +211,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               {user?.name || "Demo User"}
             </p>
             <p className="text-[10px] text-slate-500 truncate">
-              {user?.email || "demo@tradezella.com"}
+              {user?.email || "demo@tradeflow.com"}
             </p>
           </div>
         </Link>

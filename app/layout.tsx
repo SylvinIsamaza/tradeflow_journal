@@ -4,6 +4,7 @@ import "./globals.css";
 import { AppProvider } from "./AppContext";
 import TopLoaderProvider from "./TopLoaderProvider";
 import QueryProvider from "@/lib/providers/QueryProvider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,10 +32,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <QueryProvider>
-          <TopLoaderProvider />
-          <AppProvider>
-            {children}
-          </AppProvider>
+          <TooltipProvider>
+            <TopLoaderProvider />
+            <AppProvider>
+              {children}
+            </AppProvider>
+          </TooltipProvider>
         </QueryProvider>
       </body>
     </html>

@@ -10,8 +10,14 @@ export * from './useTrades';
 // Analytics hooks
 export * from './useAnalytics';
 
+// Reports hooks
+export * from './useReports';
+
 // Strategy hooks
 export * from './useStrategies';
 
 // Notes hooks
 export * from './useNotes';
+
+// Tags hooks
+export * from './useTags';

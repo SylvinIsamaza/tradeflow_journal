@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { accountsApi } from '@/lib/api/accounts';
-import { Account, AccountType } from '@/types';
+import { Account, AccountType, PaginationInfo } from '@/types';
 
 // Query keys
 export const accountKeys = {
@@ -15,11 +15,11 @@ export const accountKeys = {
 // Account Hooks
 // ============================================
 
-// Get all accounts
-export function useAccounts() {
-  return useQuery({
-    queryKey: accountKeys.lists(),
-    queryFn: () => accountsApi.getAll(),
+// Get all accounts with pagination
+export function useAccounts(limit: number = 50, offset: number = 0) {
+  return useQuery<{ accounts: Account[]; pagination: PaginationInfo }>({
+    queryKey: accountKeys.list({ limit, offset }),
+    queryFn: () => accountsApi.getAll(limit, offset),
   });
 }
 

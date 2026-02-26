@@ -1,15 +1,17 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import ReactECharts from "echarts-for-react";
-import { Trade, ReportTab } from "../../types";
+import { ReportTab } from "../../types";
 import { formatCurrency } from "../../utils";
 import Table, { Column } from "../Table";
+import { CompleteReportsResponse } from "../../lib/api/reports";
 
 interface ReportsViewProps {
-  trades: Trade[];
+  trades?: any[];
+  reportsData?: CompleteReportsResponse | null;
 }
 
 interface ReportDataPoint {
-  id: string; // for Table key
+  id: string;
   key: string;
   pnl: number;
   count: number;
@@ -18,7 +20,7 @@ interface ReportDataPoint {
   winRate: number;
 }
 
-const ReportsView: React.FC<ReportsViewProps> = ({ trades }) => {
+const ReportsView: React.FC<ReportsViewProps> = ({ reportsData }) => {
   const [activeTab, setActiveTab] = useState<ReportTab>("Symbol");
   const [pnlMode, setPnlMode] = useState<"Total" | "Separate">("Total");
 
@@ -31,39 +33,46 @@ const ReportsView: React.FC<ReportsViewProps> = ({ trades }) => {
     "Setups",
   ];
 
-  const reportData = useMemo(() => {
-    const dataMap: Record<
-      string,
-      Omit<ReportDataPoint, "id" | "key" | "winRate">
-    > = {};
+  // Get the correct data based on active tab from API response
+  const getReportData = (): ReportDataPoint[] => {
+    if (!reportsData) return [];
+    
+    let apiData: any[] = [];
+    
+    switch (activeTab) {
+      case "Symbol":
+        apiData = reportsData.by_symbol || [];
+        break;
+      case "Day":
+        apiData = reportsData.by_day || [];
+        break;
+      case "Month":
+        apiData = reportsData.by_month || [];
+        break;
+      case "Time":
+        apiData = reportsData.by_time || [];
+        break;
+      case "Tags":
+        apiData = reportsData.by_tags || [];
+        break;
+      case "Setups":
+        apiData = reportsData.by_setups || [];
+        break;
+    }
+    
+    // Convert API format to component format
+    return apiData.map((item) => ({
+      id: item.key,
+      key: item.key,
+      pnl: item.pnl,
+      count: item.count,
+      wins: item.wins,
+      losses: item.losses,
+      winRate: item.win_rate,
+    }));
+  };
 
-    trades.forEach((t) => {
-      let key = "";
-      if (activeTab === "Symbol") key = t.symbol;
-      else if (activeTab === "Day") {
-        key = new Date(t.date).toLocaleDateString("en-US", { weekday: "long" });
-      } else if (activeTab === "Month") {
-        key = new Date(t.date).toLocaleDateString("en-US", { month: "short" });
-      } else if (activeTab === "Time") {
-        key = t.time ? t.time.split(":")[0] + ":00" : "00:00";
-      } else if (activeTab === "Tags") key = t.generalTags[0] || "No Tag";
-      else if (activeTab === "Setups") key = t.setups[0] || "No Setup";
-
-      if (!dataMap[key])
-        dataMap[key] = { pnl: 0, count: 0, wins: 0, losses: 0 };
-      dataMap[key].pnl += t.pnl;
-      dataMap[key].count += 1;
-      if (t.pnl > 0) dataMap[key].wins += 1;
-      else if (t.pnl < 0) dataMap[key].losses += 1;
-    });
-
-    return Object.entries(dataMap).map(([key, stats]) => ({
-      id: key,
-      key,
-      ...stats,
-      winRate: stats.count > 0 ? (stats.wins / stats.count) * 100 : 0,
-    })) as ReportDataPoint[];
-  }, [trades, activeTab]);
+  const reportData = getReportData();
 
   const sortedByPnL = [...reportData].sort((a, b) => b.pnl - a.pnl);
   const sortedByCount = [...reportData].sort((a, b) => b.count - a.count);
@@ -181,7 +190,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ trades }) => {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-6 py-2 rounded-xl text-[11px] font-bold transition-all ${activeTab === tab ? "bg-[#ff4d00] text-white shadow-lg" : "text-slate-500 hover:bg-slate-200/50"}`}
+              className={`px-6 py-2 rounded-xl text-[11px] font-bold transition-all ${activeTab === tab ? "bg-primary text-white shadow-lg" : "text-slate-500 hover:bg-slate-200/50"}`}
             >
               {tab}
             </button>
@@ -196,20 +205,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ trades }) => {
             <h3 className="text-sm font-black text-slate-800 tracking-tight">
               P&L By {activeTab}
             </h3>
-            <div className="bg-slate-100 p-0.5 rounded-lg flex gap-1">
-              <button
-                onClick={() => setPnlMode("Separate")}
-                className={`px-3 py-1 text-[9px] font-black uppercase rounded-md ${pnlMode === "Separate" ? "bg-white shadow-sm text-slate-800" : "text-slate-400"}`}
-              >
-                Separate
-              </button>
-              <button
-                onClick={() => setPnlMode("Total")}
-                className={`px-3 py-1 text-[9px] font-black uppercase rounded-md ${pnlMode === "Total" ? "bg-[#ff4d00] text-white" : "text-slate-400"}`}
-              >
-                Total
-              </button>
-            </div>
+           
           </div>
           <div className="h-80 w-full">
             <ReactECharts
@@ -275,9 +271,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ trades }) => {
           <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">
             Overview
           </h3>
-          <button className="text-[10px] font-bold text-slate-400 border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50">
-            Show all {activeTab.toLowerCase()}s
-          </button>
+
         </div>
         <Table columns={overviewColumns} data={reportData} />
       </div>

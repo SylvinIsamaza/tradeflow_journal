@@ -1,5 +1,5 @@
 import { privateClient } from './axios';
-import { Strategy } from '@/types';
+import { Strategy, PaginationInfo } from '@/types';
 
 interface StrategyResponse {
   id: string;
@@ -11,6 +11,14 @@ interface StrategyResponse {
   risk_rules: string[];
   color: string | null;
   created_at: string;
+}
+
+interface PaginatedStrategyResponse {
+  items: StrategyResponse[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
 }
 
 const transformStrategy = (s: StrategyResponse): Strategy => ({
@@ -26,10 +34,22 @@ const transformStrategy = (s: StrategyResponse): Strategy => ({
 });
 
 export const strategiesApi = {
-  async getAll(accountId?: string): Promise<Strategy[]> {
-    const params = accountId ? `?account_id=${accountId}` : '';
-    const response = await privateClient.get<StrategyResponse[]>(`/strategies/${params}`);
-    return response.data.map(transformStrategy);
+  async getAll(accountId?: string, limit: number = 50, offset: number = 0): Promise<{ strategies: Strategy[]; pagination: PaginationInfo }> {
+    let params = '';
+    if (accountId) params += `account_id=${accountId}`;
+    if (params) params += '&';
+    params += `limit=${limit}&offset=${offset}`;
+    
+    const response = await privateClient.get<PaginatedStrategyResponse>(`/strategies/?${params}`);
+    return {
+      strategies: response.data.items.map(transformStrategy),
+      pagination: {
+        total: response.data.total,
+        page: response.data.page,
+        limit: response.data.limit,
+        totalPages: response.data.total_pages
+      }
+    };
   },
 
   async getById(id: string): Promise<Strategy | null> {

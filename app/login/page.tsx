@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [useBackupCode, setUseBackupCode] = useState(false);
   const [showTwoFactor, setShowTwoFactor] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -136,26 +137,46 @@ export default function LoginPage() {
                 </div>
               </>
             ) : (
-              <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-                  Authentication Code
-                </label>
-                <input
-                  type="text"
-                  value={twoFactorCode}
-                  onChange={(e) =>
-                    setTwoFactorCode(
-                      e.target.value.replace(/\D/g, "").slice(0, 6),
-                    )
-                  }
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-center text-2xl font-black tracking-[0.5em]"
-                  placeholder="000000"
-                  maxLength={6}
-                  required
-                />
-                <p className="text-xs text-slate-400 mt-2">
-                  Enter the 6-digit code from your authenticator app
-                </p>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
+                    {useBackupCode ? "Backup Code" : "Authentication Code"}
+                  </label>
+                  <input
+                    type="text"
+                    value={twoFactorCode}
+                    onChange={(e) =>
+                      setTwoFactorCode(
+                        useBackupCode
+                          ? e.target.value.toUpperCase().slice(0, 8)
+                          : e.target.value.replace(/\D/g, "").slice(0, 6),
+                      )
+                    }
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-center text-2xl font-black tracking-[0.5em]"
+                    placeholder={useBackupCode ? "ABCD1234" : "000000"}
+                    maxLength={useBackupCode ? 8 : 6}
+                    required
+                  />
+                  <p className="text-xs text-slate-400 mt-2">
+                    {useBackupCode
+                      ? "Enter one of your 8-character backup codes"
+                      : "Enter the 6-digit code from your authenticator app"
+                    }
+                  </p>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseBackupCode(!useBackupCode);
+                      setTwoFactorCode("");
+                    }}
+                    className="text-xs text-indigo-400 font-bold hover:text-indigo-300 transition-colors"
+                  >
+                    {useBackupCode ? "← Use authenticator code" : "Use backup code instead"}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -197,6 +218,7 @@ export default function LoginPage() {
               onClick={() => {
                 setShowTwoFactor(false);
                 setTwoFactorCode("");
+                setUseBackupCode(false);
                 setError("");
               }}
               className="w-full mt-4 text-sm text-slate-400 font-bold hover:text-white transition-colors"

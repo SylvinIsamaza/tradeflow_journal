@@ -28,6 +28,7 @@ const PlaybookView: React.FC<PlaybookViewProps> = ({
   const [editingStrategy, setEditingStrategy] =
     useState<Partial<Strategy> | null>(null);
   const [editorStep, setEditorStep] = useState<EditorStep>("GENERAL");
+  const [deletingStrategyId, setDeletingStrategyId] = useState<string | null>(null);
 
   const selectedStrategy = useMemo(
     () => strategies.find((s) => s.id === selectedStrategyId),
@@ -247,10 +248,7 @@ const PlaybookView: React.FC<PlaybookViewProps> = ({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onDeleteStrategy(strat.id);
-                    if (selectedStrategyId === strat.id) {
-                      setSelectedStrategyId(strategies[0]?.id || null);
-                    }
+                    setDeletingStrategyId(strat.id);
                   }}
                   className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
                   title="Delete strategy"
@@ -598,6 +596,38 @@ const PlaybookView: React.FC<PlaybookViewProps> = ({
           </div>
         </div>
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+      {deletingStrategyId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-black text-slate-800 mb-2">Delete Strategy?</h3>
+            <p className="text-sm text-slate-600 mb-6">This will permanently delete this strategy. This action cannot be undone.</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeletingStrategyId(null)}
+                className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (deletingStrategyId) {
+                    onDeleteStrategy(deletingStrategyId);
+                    if (selectedStrategyId === deletingStrategyId) {
+                      setSelectedStrategyId(strategies[0]?.id || null);
+                    }
+                    setDeletingStrategyId(null);
+                  }
+                }}
+                className="px-4 py-2 text-sm font-bold text-white bg-rose-500 rounded-xl hover:bg-rose-600 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

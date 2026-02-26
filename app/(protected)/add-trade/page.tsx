@@ -2,12 +2,17 @@
 
 import AddTradeView from "@/components/views/AddTradeView";
 import { useAccounts, useCreateTrade, useStrategies } from "@/lib/hooks";
+import { useApp } from "@/app/AppContext";
 import { useRouter } from "next/navigation";
 import { Trade } from "@/types";
 
 export default function AddTradePage() {
-  const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
-  const { data: strategies = [] } = useStrategies(accounts[0]?.id);
+  const { selectedAccount: contextAccount } = useApp();
+  const { data: accountsResponse, isLoading: accountsLoading } = useAccounts();
+  const { data: strategiesResponse } = useStrategies(contextAccount?.id);
+  
+  const accounts = accountsResponse?.accounts || [];
+  const strategies = strategiesResponse?.strategies || [];
   const createTrade = useCreateTrade();
   const router = useRouter();
 

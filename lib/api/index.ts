@@ -8,3 +8,4 @@ export { tradesApi } from './trades';
 export { analyticsApi } from './analytics';
 export { strategiesApi } from './strategies';
 export { notesApi } from './notes';
+export { tagsApi } from './tags';
